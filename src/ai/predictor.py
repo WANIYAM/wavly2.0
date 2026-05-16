@@ -49,21 +49,42 @@ class GesturePredictor:
         for gesture, prob in sorted(prob_dict.items(), key=lambda x: x[1], reverse=True):
             print(f"  {gesture}: {prob:.2%}")
 
+        # Special case for four_fingers
+        if prediction == "four_fingers" and top_confidence >= 0.35:
+            print(f"Returning: {prediction} (confidence {top_confidence:.2%} >= 35% special case)")
+            result = prediction
+
         # Return "unknown" if confidence is below 45%
-        if top_confidence < 0.45:
+        elif top_confidence < 0.45:
             print(f"Returning 'unknown' (confidence {top_confidence:.2%} < 45%)")
-            return "unknown"
+            result = "unknown"
 
         # If confidence is between 45-60%, check if second best is more than 20% different
-        if 0.45 <= top_confidence < 0.60:
+        elif 0.45 <= top_confidence < 0.60:
             confidence_diff = top_confidence - second_confidence
             if confidence_diff <= 0.20:
                 print(f"Returning 'unknown' (confidence {top_confidence:.2%} in 45-60% range, but diff {confidence_diff:.2%} <= 20%)")
-                return "unknown"
+                result = "unknown"
             else:
                 print(f"Returning: {prediction} (confidence {top_confidence:.2%}, diff {confidence_diff:.2%} > 20%)")
-                return prediction
+                result = prediction
 
         # If confidence is above 60%, always return the gesture
-        print(f"Returning: {prediction} (confidence {top_confidence:.2%} >= 60%)")
-        return prediction
+        else:
+            print(f"Returning: {prediction} (confidence {top_confidence:.2%} >= 60%)")
+            result = prediction
+
+        # Post-processing override
+        if result == "open_hand":
+            thumb_tip_x = landmark_list[4][0]
+            thumb_base_x = landmark_list[2][0]
+            index_base_x = landmark_list[5][0]
+            
+            # Assuming standard 640px width to calculate 'pixels' from normalized x coords
+            distance_pixels = abs(thumb_tip_x - index_base_x) * 640
+            
+            if distance_pixels <= 30:
+                print("OVERRIDE: open_hand → four_fingers")
+                result = "four_fingers"
+
+        return result

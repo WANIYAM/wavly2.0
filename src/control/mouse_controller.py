@@ -44,9 +44,10 @@ class MouseController:
 
         pyautogui.moveTo(smoothed_x, smoothed_y)
 
-    def click(self):
+    def click(self, typing_mode=False):
         current_time = time.time()
-        if current_time - self.last_click_time >= 1.0:
+        cooldown = 0.2 if typing_mode else 0.3
+        if current_time - self.last_click_time >= cooldown:
             pyautogui.click()
             self.last_click_time = current_time
 

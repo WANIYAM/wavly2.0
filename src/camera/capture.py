@@ -3,9 +3,11 @@ import time
 from .hand_tracker import HandTracker
 from src.control.mouse_controller import MouseController
 from src.control.gesture_mapper import GestureMapper
-from src.gestures.gesture_detector import GestureDetector
 from src.ai.data_collector import DataCollector
 from src.ai.predictor import GesturePredictor
+from collections import Counter
+import math
+import numpy as np
 
 
 class CameraFeed:
@@ -14,7 +16,6 @@ class CameraFeed:
         self.hand_tracker = HandTracker()
         self.mouse_controller = MouseController()
         self.gesture_mapper = GestureMapper()
-        self.gesture_detector = GestureDetector()
         self.data_collector = DataCollector()
         self.gesture_predictor = GesturePredictor()
         self.prev_frame_time = 0
@@ -122,7 +123,6 @@ class CameraFeed:
                     self.gesture_buffer.pop(0)
 
                 # Count occurrences of each gesture in buffer
-                from collections import Counter
                 gesture_counts = Counter(self.gesture_buffer)
 
                 # Find gesture with most votes
@@ -134,22 +134,23 @@ class CameraFeed:
 
                 # PINCH DETECTION (independent from ML prediction)
                 # Calculate distance between thumb tip (landmark 4) and index tip (landmark 8)
-                import math
                 pinch_distance = math.sqrt(
                     (thumb_tip[0] - index_fingertip[0]) ** 2 +
                     (thumb_tip[1] - index_fingertip[1]) ** 2
                 )
 
+                if self.frame_count % 10 == 0:
+                    print(f"PINCH DISTANCE: {int(pinch_distance)}px | THRESHOLD: 40px")
+
                 # Trigger click if pinch detected and current gesture is NOT fist
                 pinch_detected = pinch_distance < 40 and confirmed_gesture != "fist"
                 if pinch_detected:
-                    self.mouse_controller.click()
+                    self.mouse_controller.click(self.gesture_mapper.is_typing_mode())
                     # Display "PINCH DETECTED" in blue
                     cv2.putText(frame, "PINCH DETECTED", (10, 230),
                                cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 0, 0), 2)
 
                 # Get top 3 predictions with confidence scores for debug overlay
-                import numpy as np
                 features = np.array(normalized_landmarks).flatten().reshape(1, -1)
                 probabilities = self.gesture_predictor.model.predict_proba(features)[0]
                 class_names = self.gesture_predictor.model.classes_
@@ -190,6 +191,15 @@ class CameraFeed:
                     else:
                         # All other gestures freeze cursor while action executes
                         should_move = False
+
+                # Check typing mode and adjust speed / show text
+                if self.gesture_mapper.is_typing_mode():
+                    cv2.putText(frame, "\u2328 TYPING", (10, 270),
+                               cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 0, 0), 2)
+                    cv2.putText(frame, "FIST to exit typing mode", (10, 300),
+                               cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 0, 0), 2)
+                    if is_confirmed and confirmed_gesture in ["open_hand", "point"]:
+                        speed_multiplier = 0.3
 
                 # Move mouse cursor if allowed
                 if should_move:

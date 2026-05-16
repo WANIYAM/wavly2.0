@@ -7,10 +7,9 @@ class GestureMapper:
         self.last_action_time = 0
         self.cooldown = 1.0  # 1 second cooldown for actions
         self.current_mode = "normal"  # default cursor mode
+        self.typing_mode = False
 
-        # Gesture stabilizer - requires 3 consecutive frames of same gesture
-        self.gesture_history = []
-        self.stabilization_frames = 3
+
 
         # Mode gestures (no cooldown) - affect cursor behavior
         self.mode_gestures = {
@@ -26,58 +25,46 @@ class GestureMapper:
             "four_fingers": self._screenshot,
             "thumbs_up": self._volume_up,
             "thumbs_down": self._volume_down,
-            "pinch": self._left_click,
+            "peace": self._open_browser,
             "l_shape": self._right_click
         }
 
     def execute(self, gesture_name):
         """
         Execute action or set mode based on gesture name.
-        Requires 3 consecutive frames of the same gesture before executing.
 
         Returns:
             - Mode name (str) for mode gestures
             - "executed" for successful action execution
             - "cooldown" if action is on cooldown
-            - "stabilizing" if waiting for gesture stabilization
             - None for unknown gestures
         """
-        # Ignore "unknown" gestures - they reset the history
         if gesture_name == "unknown" or gesture_name is None:
-            self.gesture_history = []
             return None
 
-        # Add current gesture to history
-        self.gesture_history.append(gesture_name)
-
-        # Keep only the last N frames
-        if len(self.gesture_history) > self.stabilization_frames:
-            self.gesture_history.pop(0)
-
-        # Check if we have enough frames and they're all the same
-        if len(self.gesture_history) < self.stabilization_frames:
-            return "stabilizing"
-
-        if len(set(self.gesture_history)) != 1:
-            # Not all gestures are the same
-            return "stabilizing"
-
-        # All frames show the same gesture - proceed with execution
-        stabilized_gesture = self.gesture_history[0]
+        # Print the received gesture and its mapped action
+        mapped_action = None
+        if gesture_name in self.mode_gestures:
+            mapped_action = self.mode_gestures[gesture_name]
+        elif gesture_name in self.action_gestures:
+            mapped_action = self.action_gestures[gesture_name].__name__.lstrip('_')
+            
+        if mapped_action:
+            print(f"MAPPER RECEIVED: {gesture_name} → {mapped_action}")
 
         # Handle mode gestures (no cooldown)
-        if stabilized_gesture in self.mode_gestures:
-            self.current_mode = self.mode_gestures[stabilized_gesture]
+        if gesture_name in self.mode_gestures:
+            if gesture_name == "fist":
+                self.typing_mode = False
+            self.current_mode = self.mode_gestures[gesture_name]
             return self.current_mode
 
         # Handle action gestures (with cooldown)
-        if stabilized_gesture in self.action_gestures:
+        if gesture_name in self.action_gestures:
             current_time = time.time()
             if current_time - self.last_action_time >= self.cooldown:
-                self.action_gestures[stabilized_gesture]()
+                self.action_gestures[gesture_name]()
                 self.last_action_time = current_time
-                # Clear history after successful execution to prevent repeated triggers
-                self.gesture_history = []
                 return "executed"
             else:
                 return "cooldown"
@@ -88,8 +75,13 @@ class GestureMapper:
         """Get the current cursor mode."""
         return self.current_mode
 
+    def is_typing_mode(self):
+        """Return whether typing mode is currently active."""
+        return self.typing_mode
+
     def _open_keyboard(self):
         """Open on-screen keyboard (Win+Ctrl+O)."""
+        self.typing_mode = True
         pyautogui.hotkey('win', 'ctrl', 'o')
 
     def _screenshot(self):
@@ -104,9 +96,9 @@ class GestureMapper:
         """Decrease system volume."""
         pyautogui.press('volumedown')
 
-    def _left_click(self):
-        """Perform left mouse click."""
-        pyautogui.click()
+    def _open_browser(self):
+        """Open a new browser tab."""
+        pyautogui.hotkey('ctrl', 't')
 
     def _right_click(self):
         """Perform right mouse click."""
