@@ -23,6 +23,7 @@ class CameraFeed:
         self.prev_hand_y = None
         self.scroll_threshold = 20
         self.last_scroll_time = 0
+        self.pinch_active = False
         self.recording = False
         self.current_gesture_label = None
         self.frame_count = 0
@@ -30,7 +31,6 @@ class CameraFeed:
         self.gesture_mapping = {
             ord('0'): 'fist',
             ord('1'): 'open_hand',
-            ord('2'): 'peace',
             ord('3'): 'point',
             ord('4'): 'two_fingers',
             ord('5'): 'three_fingers',
@@ -47,7 +47,7 @@ class CameraFeed:
             print("Error: Could not open webcam")
             return
 
-        print("Camera started. Press 'Q' to quit, 'R' to toggle recording.")
+        print("[CAMERA] Webcam started")
 
         while True:
             ret, frame = self.cap.read()
@@ -65,15 +65,14 @@ class CameraFeed:
             # Toggle recording mode with 'R' key
             if key == ord('r') or key == ord('R'):
                 self.recording = not self.recording
-                if self.recording:
-                    print("Recording mode ON")
-                else:
-                    print("Recording mode OFF")
+                if self.recording and self.current_gesture_label:
+                    print(f"[RECORD] Recording: {self.current_gesture_label}")
 
-            # Set gesture label with keys 0-4
+            # Set gesture label with keys 0-9
             if key in self.gesture_mapping:
                 self.current_gesture_label = self.gesture_mapping[key]
-                print(f"Gesture label set to: {self.current_gesture_label}")
+                if self.recording:
+                    print(f"[RECORD] Recording: {self.current_gesture_label}")
 
             # Check for quit
             if key == ord('q') or key == ord('Q'):
@@ -109,6 +108,7 @@ class CameraFeed:
                 # Get landmark list and draw circle on index fingertip
                 landmark_list = self.hand_tracker.get_landmark_list(landmarks, frame_width, frame_height)
                 index_fingertip = landmark_list[8]
+                index_pip = landmark_list[6]
                 thumb_tip = landmark_list[4]
 
                 # Predict gesture using ML model (use normalized landmarks)
@@ -139,13 +139,19 @@ class CameraFeed:
                     (thumb_tip[1] - index_fingertip[1]) ** 2
                 )
 
-                if self.frame_count % 10 == 0:
-                    print(f"PINCH DISTANCE: {int(pinch_distance)}px | THRESHOLD: 40px")
+                # Check if index finger is curled (y positions are close)
+                is_index_curled = abs(index_fingertip[1] - index_pip[1]) < 30
 
                 # Trigger click if pinch detected and current gesture is NOT fist
-                pinch_detected = pinch_distance < 40 and confirmed_gesture != "fist"
-                if pinch_detected:
-                    self.mouse_controller.click(self.gesture_mapper.is_typing_mode())
+                if pinch_distance < 60 and is_index_curled and confirmed_gesture != "fist":
+                    if not self.pinch_active:
+                        self.pinch_active = True
+                        self.mouse_controller.click()
+                        print("[PINCH] Click detected")
+                elif pinch_distance > 80:
+                    self.pinch_active = False
+
+                if self.pinch_active:
                     # Display "PINCH DETECTED" in blue
                     cv2.putText(frame, "PINCH DETECTED", (10, 230),
                                cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 0, 0), 2)
@@ -159,11 +165,7 @@ class CameraFeed:
                 top_3_indices = np.argsort(probabilities)[-3:][::-1]
                 top_3_predictions = [(class_names[i], probabilities[i]) for i in top_3_indices]
 
-                # Print debug info every 15 frames
-                if self.frame_count % 15 == 0:
-                    first_gesture, first_conf = top_3_predictions[0]
-                    second_gesture, second_conf = top_3_predictions[1]
-                    print(f"GESTURE: {first_gesture} | {int(first_conf * 100)}% | 2nd: {second_gesture} {int(second_conf * 100)}%")
+
 
                 # Execute gesture action/mode via GestureMapper only with confirmed gesture
                 if is_confirmed:
@@ -191,15 +193,6 @@ class CameraFeed:
                     else:
                         # All other gestures freeze cursor while action executes
                         should_move = False
-
-                # Check typing mode and adjust speed / show text
-                if self.gesture_mapper.is_typing_mode():
-                    cv2.putText(frame, "\u2328 TYPING", (10, 270),
-                               cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 0, 0), 2)
-                    cv2.putText(frame, "FIST to exit typing mode", (10, 300),
-                               cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 0, 0), 2)
-                    if is_confirmed and confirmed_gesture in ["open_hand", "point"]:
-                        speed_multiplier = 0.3
 
                 # Move mouse cursor if allowed
                 if should_move:
@@ -295,4 +288,3 @@ class CameraFeed:
             self.cap.release()
         self.hand_tracker.close()
         cv2.destroyAllWindows()
-        print("Camera stopped")

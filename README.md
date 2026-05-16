@@ -16,7 +16,7 @@ The system captures real-time video, detects hand landmarks, classifies gestures
 
 ## Gestures & Actions
 
-Wavly recognizes **10 distinct hand gestures** divided into two categories:
+Wavly recognizes **9 distinct hand gestures** divided into two categories:
 
 ### Mode Gestures (Cursor Control)
 These gestures change how your cursor behaves:
@@ -30,10 +30,10 @@ These gestures change how your cursor behaves:
 These gestures execute system actions with a 1-second cooldown:
 
 5. **Three Fingers** → Open on-screen keyboard (Win+Ctrl+O)
-6. **Four Fingers** → Take screenshot (Win+Shift+S)
+6. **Four Fingers** → Take screenshot (Win+Shift+S) / Hold 2s for Drawing Mode
 7. **Thumbs Up** → Volume up
 8. **Thumbs Down** → Volume down
-9. **Pinch** (thumb + index) → Left mouse click
+9. **Pinch** (thumb + index) → Left mouse click / Exit Drawing Mode
 10. **L-Shape** (thumb + middle) → Right mouse click
 
 All gestures require 3 consecutive frames of detection for stabilization, preventing accidental triggers.
@@ -179,7 +179,6 @@ Contributions are welcome! Please follow the guidelines in `CLAUDE.md` for devel
 Built with MediaPipe by Google for hand tracking and PyAutoGUI for system automation.
 0 = fist
 1 = open_hand
-2 = peace
 3 = point
 4 = two_fingers
 5 = three_fingers

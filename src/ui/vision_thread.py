@@ -1,0 +1,190 @@
+import cv2
+import time
+import math
+import numpy as np
+import warnings
+from collections import Counter
+from PyQt6.QtCore import QThread, pyqtSignal
+
+from src.camera.hand_tracker import HandTracker
+from src.control.mouse_controller import MouseController
+from src.control.gesture_mapper import GestureMapper
+from src.ai.data_collector import DataCollector
+from src.ai.predictor import GesturePredictor
+
+warnings.filterwarnings("ignore")
+
+class VisionThread(QThread):
+    # Signals to communicate with the PyQt main thread
+    point_detected = pyqtSignal(int, int)
+    gesture_detected = pyqtSignal(str)
+
+    def __init__(self):
+        super().__init__()
+        self.running = True
+        self.hand_tracker = HandTracker()
+        self.mouse_controller = MouseController()
+        self.gesture_mapper = GestureMapper()
+        self.data_collector = DataCollector()
+        self.gesture_predictor = GesturePredictor()
+
+        self.prev_frame_time = 0
+        self.fps = 0
+        self.recording = False
+        self.current_gesture_label = None
+        self.frame_count = 0
+        self.gesture_buffer = []
+        self.pinch_active = False
+
+        # Expose mapping to UI so it can pass keyboard events down
+        self.gesture_mapping = {
+            '0': 'fist',
+            '1': 'open_hand',
+            '2': 'peace',
+            '3': 'point',
+            '4': 'two_fingers',
+            '5': 'three_fingers',
+            '6': 'four_fingers',
+            '7': 'thumbs_up',
+            '8': 'thumbs_down',
+            '9': 'l_shape'
+        }
+
+    def toggle_recording(self):
+        self.recording = not self.recording
+        if self.recording and self.current_gesture_label:
+            print(f"[RECORD] Recording: {self.current_gesture_label}")
+
+    def set_gesture_label(self, key_str):
+        if key_str in self.gesture_mapping:
+            self.current_gesture_label = self.gesture_mapping[key_str]
+            if self.recording:
+                print(f"[RECORD] Recording: {self.current_gesture_label}")
+
+    def stop(self):
+        if not self.running:
+            return
+        self.running = False
+        self.wait()
+        self.hand_tracker.close()
+
+    def run(self):
+        cap = cv2.VideoCapture(0)
+
+        if not cap.isOpened():
+            print("Error: Could not open webcam")
+            return
+
+        print("[CAMERA] Webcam started")
+
+        while self.running:
+            ret, frame = cap.read()
+            if not ret:
+                print("Error: Failed to capture frame")
+                break
+
+            # Flip frame horizontally for mirror effect
+            frame = cv2.flip(frame, 1)
+            self.frame_count += 1
+
+            # Calculate FPS
+            current_time = time.time()
+            self.fps = 1 / (current_time - self.prev_frame_time) if self.prev_frame_time > 0 else 0
+            self.prev_frame_time = current_time
+
+            # Detect hand landmarks
+            landmarks = self.hand_tracker.detect(frame)
+            frame_height, frame_width = frame.shape[:2]
+
+            display_gesture = "No Hand"
+
+            if landmarks is not None:
+                # Save data if recording mode is ON and gesture label is set
+                if self.recording and self.current_gesture_label is not None:
+                    self.data_collector.save(landmarks.landmark, self.current_gesture_label)
+
+                # Get landmark list and find tips
+                landmark_list = self.hand_tracker.get_landmark_list(landmarks, frame_width, frame_height)
+                index_fingertip = landmark_list[8]
+                index_pip = landmark_list[6]
+                thumb_tip = landmark_list[4]
+
+                # Emit drawing coordinates to the UI thread
+                self.point_detected.emit(index_fingertip[0], index_fingertip[1])
+
+                # Predict gesture using ML model (use normalized landmarks)
+                normalized_landmarks = [(lm.x, lm.y) for lm in landmarks.landmark]
+                predicted_gesture = self.gesture_predictor.predict(normalized_landmarks)
+
+                # Add raw prediction to gesture buffer
+                self.gesture_buffer.append(predicted_gesture)
+                if len(self.gesture_buffer) > 7:
+                    self.gesture_buffer.pop(0)
+
+                # Count occurrences of each gesture in buffer
+                gesture_counts = Counter(self.gesture_buffer)
+                most_common_gesture, vote_count = gesture_counts.most_common(1)[0] if gesture_counts else ("unknown", 0)
+
+                # Confirm gesture only if it appears 5 or more times out of 7
+                confirmed_gesture = most_common_gesture if vote_count >= 5 else None
+                is_confirmed = confirmed_gesture is not None
+                
+                if is_confirmed and confirmed_gesture != getattr(self, 'last_logged_gesture', None):
+                    print(f"[BUFFER] confirmed: {confirmed_gesture} ({vote_count}/7 votes)")
+                    self.last_logged_gesture = confirmed_gesture
+
+                # Pinch detection
+                pinch_distance = math.sqrt(
+                    (thumb_tip[0] - index_fingertip[0]) ** 2 +
+                    (thumb_tip[1] - index_fingertip[1]) ** 2
+                )
+
+                # Check if index finger is curled (y positions are close)
+                is_index_curled = abs(index_fingertip[1] - index_pip[1]) < 30
+
+                # Trigger click if pinch detected and current gesture is NOT fist
+                if pinch_distance < 60 and is_index_curled and confirmed_gesture != "fist":
+                    if not self.pinch_active:
+                        self.pinch_active = True
+                        self.mouse_controller.click()
+                        print("[PINCH] Click detected")
+                elif pinch_distance > 80:
+                    self.pinch_active = False
+
+
+
+                # Execute gesture action
+                if is_confirmed:
+                    self.gesture_mapper.execute(confirmed_gesture)
+                    display_gesture = confirmed_gesture
+                else:
+                    display_gesture = "stabilizing..."
+
+                # Determine cursor movement
+                should_move = False
+                speed_multiplier = 1.0
+
+                if is_confirmed:
+                    if confirmed_gesture == "open_hand":
+                        should_move = True
+                        speed_multiplier = 1.0
+                    elif confirmed_gesture == "point":
+                        should_move = True
+                        speed_multiplier = 0.5
+                    elif confirmed_gesture == "fist":
+                        should_move = False
+
+                # Move mouse cursor
+                if should_move:
+                    self.mouse_controller.move(index_fingertip[0], index_fingertip[1],
+                                              frame_width, frame_height, speed_multiplier)
+
+                # Emit gesture detected
+                self.gesture_detected.emit(display_gesture)
+            else:
+                self.gesture_detected.emit("No Hand")
+
+            # Small sleep to prevent 100% thread usage on fast loops
+            self.msleep(10)
+
+        cap.release()

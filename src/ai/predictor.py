@@ -1,7 +1,9 @@
 import pickle
 import numpy as np
+import warnings
 from pathlib import Path
 
+warnings.filterwarnings("ignore")
 
 class GesturePredictor:
     def __init__(self):
@@ -39,39 +41,24 @@ class GesturePredictor:
         class_names = self.model.classes_
         prob_dict = {class_names[i]: probabilities[i] for i in range(len(class_names))}
 
-        # Print debugging information every frame
-        print(f"\n--- PREDICTION DEBUG ---")
-        print(f"Model thinks: {prediction}")
-        print(f"Top confidence: {top_confidence:.2%}")
-        print(f"Second confidence: {second_confidence:.2%}")
-        print(f"Difference: {(top_confidence - second_confidence):.2%}")
-        print(f"All probabilities:")
-        for gesture, prob in sorted(prob_dict.items(), key=lambda x: x[1], reverse=True):
-            print(f"  {gesture}: {prob:.2%}")
-
         # Special case for four_fingers
         if prediction == "four_fingers" and top_confidence >= 0.35:
-            print(f"Returning: {prediction} (confidence {top_confidence:.2%} >= 35% special case)")
             result = prediction
 
         # Return "unknown" if confidence is below 45%
         elif top_confidence < 0.45:
-            print(f"Returning 'unknown' (confidence {top_confidence:.2%} < 45%)")
             result = "unknown"
 
         # If confidence is between 45-60%, check if second best is more than 20% different
         elif 0.45 <= top_confidence < 0.60:
             confidence_diff = top_confidence - second_confidence
             if confidence_diff <= 0.20:
-                print(f"Returning 'unknown' (confidence {top_confidence:.2%} in 45-60% range, but diff {confidence_diff:.2%} <= 20%)")
                 result = "unknown"
             else:
-                print(f"Returning: {prediction} (confidence {top_confidence:.2%}, diff {confidence_diff:.2%} > 20%)")
                 result = prediction
 
         # If confidence is above 60%, always return the gesture
         else:
-            print(f"Returning: {prediction} (confidence {top_confidence:.2%} >= 60%)")
             result = prediction
 
         # Post-processing override
@@ -84,7 +71,6 @@ class GesturePredictor:
             distance_pixels = abs(thumb_tip_x - index_base_x) * 640
             
             if distance_pixels <= 30:
-                print("OVERRIDE: open_hand → four_fingers")
                 result = "four_fingers"
 
         return result
