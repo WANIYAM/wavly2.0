@@ -20,6 +20,7 @@ class VisionThread(QThread):
     gesture_detected = pyqtSignal(str)
     gesture_command = pyqtSignal(str)
     mode_changed = pyqtSignal(str)
+    app_changed = pyqtSignal(str)
 
     def __init__(self):
         super().__init__()
@@ -80,6 +81,15 @@ class VisionThread(QThread):
 
         print("[CAMERA] Webcam started")
 
+        # Emit initial active app
+        try:
+            initial_app = self.gesture_mapper.context_detector.get_active_app()
+            self.gesture_mapper.current_app = initial_app
+            self.gesture_mapper.last_app_check = time.time()
+            self.app_changed.emit(initial_app)
+        except Exception as e:
+            print(f"[VISION] Error getting initial app: {e}")
+
         while self.running:
             ret, frame = cap.read()
             if not ret:
@@ -89,6 +99,19 @@ class VisionThread(QThread):
             # Flip frame horizontally for mirror effect
             frame = cv2.flip(frame, 1)
             self.frame_count += 1
+
+            # Check active app every 2 seconds
+            now = time.time()
+            if now - self.gesture_mapper.last_app_check >= self.gesture_mapper.app_check_interval:
+                try:
+                    new_app = self.gesture_mapper.context_detector.get_active_app()
+                    if new_app != self.gesture_mapper.current_app:
+                        self.gesture_mapper.current_app = new_app
+                        print(f"[CONTEXT] App changed → {new_app}")
+                        self.app_changed.emit(new_app)
+                except Exception as e:
+                    print(f"[VISION] Error checking active app: {e}")
+                self.gesture_mapper.last_app_check = now
 
             # Calculate FPS
             current_time = time.time()
@@ -123,7 +146,7 @@ class VisionThread(QThread):
 
                 # Add prediction to buffer
                 self.gesture_buffer.append(predicted_gesture)
-                if len(self.gesture_buffer) > 10:
+                if len(self.gesture_buffer) > 7:
                     self.gesture_buffer.pop(0)
 
                 # Count votes
@@ -136,17 +159,17 @@ class VisionThread(QThread):
                 else:
                     self.unknown_streak = 0
 
-                # Only clear buffer after 5 consecutive unknowns
-                if self.unknown_streak >= 5:
+                # Only clear buffer after 3 consecutive unknowns
+                if self.unknown_streak >= 3:
                     self.gesture_buffer = []
                     self.unknown_streak = 0
 
-                # Confirm gesture if 6 out of 10 votes
-                confirmed_gesture = most_common_gesture if vote_count >= 6 and most_common_gesture != "unknown" else None
+                # Confirm gesture if 5 out of 7 votes
+                confirmed_gesture = most_common_gesture if vote_count >= 5 and most_common_gesture != "unknown" else None
                 is_confirmed = confirmed_gesture is not None
 
                 if is_confirmed and confirmed_gesture != self.last_logged_gesture:
-                    print(f"[BUFFER] confirmed: {confirmed_gesture} ({vote_count}/10 votes)")
+                    print(f"[BUFFER] confirmed: {confirmed_gesture} ({vote_count}/7 votes)")
                     self.last_logged_gesture = confirmed_gesture
 
                 # Pinch detection
@@ -214,6 +237,6 @@ class VisionThread(QThread):
                 self.gesture_detected.emit("No Hand")
 
             # Small sleep to prevent 100% thread usage on fast loops
-            self.msleep(10)
+            self.msleep(5)
 
         cap.release()

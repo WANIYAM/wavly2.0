@@ -1,4 +1,3 @@
-import sys
 import os
 from datetime import datetime
 from PyQt6.QtWidgets import QMainWindow, QApplication
@@ -55,13 +54,16 @@ class OverlayWindow(QMainWindow):
         self.last_point = None
         self.current_gesture = "Initializing..."
         self.system_mode = "NORMAL"
+        self.active_app_name = "default"
+        self.hud_opacity = 1.0
 
-        # Frame counting for UI FPS
-        self.frames = 0
-        self.fps = 0
-        self.fps_timer = QTimer()
-        self.fps_timer.timeout.connect(self.calculate_fps)
-        self.fps_timer.start(1000)
+
+
+        # HUD auto-fade timer
+        self.hud_fade_timer = QTimer()
+        self.hud_fade_timer.setSingleShot(True)
+        self.hud_fade_timer.timeout.connect(self.fade_hud)
+        self.hud_fade_timer.start(3000)
 
         # Connect to VisionThread
         self.vision_thread = VisionThread()
@@ -69,16 +71,24 @@ class OverlayWindow(QMainWindow):
         self.vision_thread.gesture_detected.connect(self.update_gesture_hud)
         self.vision_thread.gesture_command.connect(self.handle_gesture_command)
         self.vision_thread.mode_changed.connect(self.update_system_mode)
+        self.vision_thread.app_changed.connect(self.update_app_hud)
 
         self.vision_thread.start()
 
-    def calculate_fps(self):
-        self.fps = self.frames
-        self.frames = 0
-        self.update()
 
     def update_gesture_hud(self, gesture_name):
-        self.current_gesture = gesture_name
+        if gesture_name != self.current_gesture:
+            self.current_gesture = gesture_name
+            self.hud_opacity = 1.0
+            self.hud_fade_timer.start(3000)
+            self.update()
+
+    def update_app_hud(self, app_name):
+        self.active_app_name = app_name
+        self.update()
+
+    def fade_hud(self):
+        self.hud_opacity = 0.3
         self.update()
 
     def update_system_mode(self, mode):
@@ -166,64 +176,60 @@ class OverlayWindow(QMainWindow):
             self.last_point = None
 
     def paintEvent(self, event):
-        self.frames += 1
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
         # Draw the canvas buffer on screen
         painter.drawPixmap(0, 0, self.canvas)
 
-        # Draw HUD
+        # Draw HUD with opacity control
+        painter.setOpacity(self.hud_opacity)
         self.draw_hud(painter)
+        painter.setOpacity(1.0)
+        painter.end()
 
     def draw_hud(self, painter):
-        # HUD semi-transparent background
-        hud_width = 300
-        hud_height = 200
-        painter.fillRect(20, 20, hud_width, hud_height, QColor(0, 0, 0, 180))
+        # HUD size and position (bottom right corner)
+        hud_width = 280
+        hud_height = 160
+        margin = 30
+        hud_x = self.screen_width - hud_width - margin
+        hud_y = self.screen_height - hud_height - margin
 
-        # HUD Text
-        painter.setFont(QFont("Segoe UI", 12, QFont.Weight.Bold))
-        
-        # Gesture Name
-        painter.setPen(QColor(255, 255, 255))
-        painter.drawText(35, 50, f"Gesture: {self.current_gesture}")
-
-        # Current Mode
-        painter.setPen(QColor(255, 255, 255))
-        painter.drawText(35, 80, f"Mode: {self.system_mode}")
-        
-        # Color & Size
-        painter.setPen(QColor(255, 255, 255))
-        painter.drawText(35, 110, "Color: ")
-        
-        painter.setBrush(self.current_color)
+        # Background rounded rectangle (semi-transparent dark background)
+        painter.setBrush(QColor(15, 15, 15, 200))
         painter.setPen(Qt.PenStyle.NoPen)
-        painter.drawEllipse(90, 97, 15, 15)
-        
-        painter.setPen(QColor(255, 255, 255))
-        painter.drawText(120, 110, f"Size: {self.brush_size}")
+        painter.drawRoundedRect(hud_x, hud_y, hud_width, hud_height, 12.0, 12.0)
 
-        # Erase Mode
-        painter.setPen(QColor(255, 255, 255))
-        painter.drawText(35, 140, "Erase:")
-        
-        erase_text = "ON" if self.erase_mode else "OFF"
-        erase_color = QColor(255, 50, 50) if self.erase_mode else QColor(150, 150, 150)
-        painter.setPen(erase_color)
-        painter.drawText(95, 140, erase_text)
+        # Padding content offsets
+        content_x = hud_x + 15
 
-        # Hints
-        painter.setFont(QFont("Segoe UI", 10, QFont.Weight.Normal))
-        painter.setPen(QColor(200, 200, 200))
-        if self.system_mode == "NORMAL":
-            painter.drawText(35, 170, "Hint: Hold 2-fingers to draw")
+        # 1. Gesture Name (16px bold white)
+        painter.setFont(QFont("Segoe UI", 16, QFont.Weight.Bold))
+        painter.setPen(QColor(255, 255, 255))
+        painter.drawText(content_x, hud_y + 15 + 22, f"Gesture: {self.current_gesture}")
+
+        # 2. Mode (13px colored text: Green for NORMAL, Blue for DRAWING)
+        painter.setFont(QFont("Segoe UI", 13, QFont.Weight.Bold))
+        if self.system_mode == "DRAWING":
+            painter.setPen(QColor(52, 152, 219)) # Blue
         else:
-            painter.drawText(35, 170, "Hint: Pinch to exit drawing")
+            painter.setPen(QColor(46, 204, 113)) # Green
+        painter.drawText(content_x, hud_y + 15 + 22 + 28, f"Mode: {self.system_mode}")
 
-        # FPS
-        painter.setPen(QColor(255, 255, 0))
-        painter.drawText(35, 200, f"FPS: {self.fps}")
+        # 3. Active App Name (12px light gray)
+        painter.setFont(QFont("Segoe UI", 12))
+        painter.setPen(QColor(200, 200, 200))
+        painter.drawText(content_x, hud_y + 15 + 22 + 28 + 26, f"Active App: {self.active_app_name.lower()}")
+
+        # 4. Small Hint Text (10px gray)
+        painter.setFont(QFont("Segoe UI", 10))
+        painter.setPen(QColor(150, 150, 150))
+        if self.system_mode == "DRAWING":
+            hint_text = "Hint: Pinch to exit drawing"
+        else:
+            hint_text = "Hint: Hold 2-fingers to draw"
+        painter.drawText(content_x, hud_y + 160 - 15 - 2, hint_text)
 
     def keyPressEvent(self, event):
         if event.key() == Qt.Key.Key_C:

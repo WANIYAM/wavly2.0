@@ -25,7 +25,7 @@ class GesturePredictor:
             landmark_list: List of 21 (x, y) coordinate pairs
 
         Returns:
-            str: Predicted gesture name, or "unknown" if confidence < 45% or model not loaded
+            str: Predicted gesture name, or "unknown" if confidence < 40% or model not loaded
         """
         if self.model is None:
             return "unknown"
@@ -37,35 +37,34 @@ class GesturePredictor:
         # Get prediction probabilities
         probabilities = self.model.predict_proba(features)[0]
 
+        # Get class names
+        class_names = self.model.classes_
+
         # Get top 2 predictions
         top_2_indices = np.argsort(probabilities)[-2:][::-1]
         top_confidence = probabilities[top_2_indices[0]]
         second_confidence = probabilities[top_2_indices[1]]
 
-        # Get the predicted class
-        prediction = self.model.predict(features)[0]
-
-        # Get class names and create probability dict
-        class_names = self.model.classes_
-        prob_dict = {class_names[i]: probabilities[i] for i in range(len(class_names))}
+        # Get prediction from probabilities instead of self.model.predict
+        prediction = class_names[top_2_indices[0]]
 
         # Special case for four_fingers
         if prediction == "four_fingers" and top_confidence >= 0.35:
             result = prediction
 
-        # Return "unknown" if confidence is below 45%
-        elif top_confidence < 0.45:
+        # Return "unknown" if confidence is below 40%
+        elif top_confidence < 0.40:
             result = "unknown"
 
-        # If confidence is between 45-60%, check if second best is more than 20% different
-        elif 0.45 <= top_confidence < 0.60:
+        # If confidence is between 40-55%, check if second best is more than 15% different
+        elif 0.40 <= top_confidence < 0.55:
             confidence_diff = top_confidence - second_confidence
-            if confidence_diff <= 0.20:
+            if confidence_diff <= 0.15:
                 result = "unknown"
             else:
                 result = prediction
 
-        # If confidence is above 60%, always return the gesture
+        # If confidence is above 55%, always return the gesture
         else:
             result = prediction
 
