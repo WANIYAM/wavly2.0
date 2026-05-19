@@ -1,7 +1,16 @@
-opencv-python==4.13.0.92
+# Python version: 3.12.10
+
+# Core / Computer Vision & Hand Tracking
 mediapipe==0.10.14
-pyautogui==0.9.54
-scikit-learn==1.8.0
-pyqt6==6.11.0
+opencv-python==4.13.0.92
+
+# Machine Learning & Data Processing
 numpy==2.4.0
 pandas==2.2.3
+scikit-learn==1.8.0
+
+# GUI / User Interface
+PyQt6==6.11.0
+
+# Automation & OS Interaction
+PyAutoGUI==0.9.54
