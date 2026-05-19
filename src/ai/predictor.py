@@ -10,8 +10,12 @@ class GesturePredictor:
         """Load the trained gesture model from data/gesture_model.pkl"""
         model_path = Path(__file__).parent.parent.parent / "data" / "gesture_model.pkl"
 
-        with open(model_path, 'rb') as f:
-            self.model = pickle.load(f)
+        if not model_path.exists():
+            print("[PREDICTOR] No model found. Running in collection mode only.")
+            self.model = None
+        else:
+            with open(model_path, 'rb') as f:
+                self.model = pickle.load(f)
 
     def predict(self, landmark_list):
         """
@@ -21,9 +25,13 @@ class GesturePredictor:
             landmark_list: List of 21 (x, y) coordinate pairs
 
         Returns:
-            str: Predicted gesture name, or "unknown" if confidence < 45%
+            str: Predicted gesture name, or "unknown" if confidence < 45% or model not loaded
         """
-        # Flatten the landmark list into a 1D array (42 features)
+        if self.model is None:
+            return "unknown"
+
+        # Flatten landmark list into a 1D array (42 features)
+        # Landmarks are already normalized relative to wrist by data_collector
         features = np.array(landmark_list).flatten().reshape(1, -1)
 
         # Get prediction probabilities
@@ -60,17 +68,5 @@ class GesturePredictor:
         # If confidence is above 60%, always return the gesture
         else:
             result = prediction
-
-        # Post-processing override
-        if result == "open_hand":
-            thumb_tip_x = landmark_list[4][0]
-            thumb_base_x = landmark_list[2][0]
-            index_base_x = landmark_list[5][0]
-            
-            # Assuming standard 640px width to calculate 'pixels' from normalized x coords
-            distance_pixels = abs(thumb_tip_x - index_base_x) * 640
-            
-            if distance_pixels <= 30:
-                result = "four_fingers"
 
         return result

@@ -18,10 +18,15 @@ class DataCollector:
         # Create data directory if it doesn't exist
         self.data_dir.mkdir(parents=True, exist_ok=True)
 
+        # Normalize landmarks relative to wrist (landmark 0)
+        wrist_x = landmark_list[0].x
+        wrist_y = landmark_list[0].y
+        normalized = [(lm.x - wrist_x, lm.y - wrist_y) for lm in landmark_list]
+
         # Flatten landmarks into [x1, y1, x2, y2, ..., x21, y21]
         flattened_landmarks = []
-        for landmark in landmark_list:
-            flattened_landmarks.extend([landmark.x, landmark.y])
+        for x, y in normalized:
+            flattened_landmarks.extend([x, y])
 
         # Prepare row: [gesture_name, x1, y1, x2, y2, ..., x21, y21]
         row = [gesture_name] + flattened_landmarks

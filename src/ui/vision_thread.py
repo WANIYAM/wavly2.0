@@ -18,6 +18,8 @@ class VisionThread(QThread):
     # Signals to communicate with the PyQt main thread
     point_detected = pyqtSignal(int, int)
     gesture_detected = pyqtSignal(str)
+    gesture_command = pyqtSignal(str)
+    mode_changed = pyqtSignal(str)
 
     def __init__(self):
         super().__init__()
@@ -34,13 +36,14 @@ class VisionThread(QThread):
         self.current_gesture_label = None
         self.frame_count = 0
         self.gesture_buffer = []
+        self.unknown_streak = 0
+        self.last_logged_gesture = None
         self.pinch_active = False
 
         # Expose mapping to UI so it can pass keyboard events down
         self.gesture_mapping = {
             '0': 'fist',
             '1': 'open_hand',
-            '2': 'peace',
             '3': 'point',
             '4': 'two_fingers',
             '5': 'three_fingers',
@@ -113,24 +116,37 @@ class VisionThread(QThread):
                 self.point_detected.emit(index_fingertip[0], index_fingertip[1])
 
                 # Predict gesture using ML model (use normalized landmarks)
-                normalized_landmarks = [(lm.x, lm.y) for lm in landmarks.landmark]
+                raw_landmarks = [(lm.x, lm.y) for lm in landmarks.landmark]
+                wrist_x, wrist_y = raw_landmarks[0]
+                normalized_landmarks = [(x - wrist_x, y - wrist_y) for x, y in raw_landmarks]
                 predicted_gesture = self.gesture_predictor.predict(normalized_landmarks)
 
-                # Add raw prediction to gesture buffer
+                # Add prediction to buffer
                 self.gesture_buffer.append(predicted_gesture)
-                if len(self.gesture_buffer) > 7:
+                if len(self.gesture_buffer) > 10:
                     self.gesture_buffer.pop(0)
 
-                # Count occurrences of each gesture in buffer
+                # Count votes
                 gesture_counts = Counter(self.gesture_buffer)
                 most_common_gesture, vote_count = gesture_counts.most_common(1)[0] if gesture_counts else ("unknown", 0)
 
-                # Confirm gesture only if it appears 5 or more times out of 7
-                confirmed_gesture = most_common_gesture if vote_count >= 5 else None
+                # Track unknown streak
+                if most_common_gesture == "unknown":
+                    self.unknown_streak += 1
+                else:
+                    self.unknown_streak = 0
+
+                # Only clear buffer after 5 consecutive unknowns
+                if self.unknown_streak >= 5:
+                    self.gesture_buffer = []
+                    self.unknown_streak = 0
+
+                # Confirm gesture if 6 out of 10 votes
+                confirmed_gesture = most_common_gesture if vote_count >= 6 and most_common_gesture != "unknown" else None
                 is_confirmed = confirmed_gesture is not None
-                
-                if is_confirmed and confirmed_gesture != getattr(self, 'last_logged_gesture', None):
-                    print(f"[BUFFER] confirmed: {confirmed_gesture} ({vote_count}/7 votes)")
+
+                if is_confirmed and confirmed_gesture != self.last_logged_gesture:
+                    print(f"[BUFFER] confirmed: {confirmed_gesture} ({vote_count}/10 votes)")
                     self.last_logged_gesture = confirmed_gesture
 
                 # Pinch detection
@@ -155,7 +171,20 @@ class VisionThread(QThread):
 
                 # Execute gesture action
                 if is_confirmed:
-                    self.gesture_mapper.execute(confirmed_gesture)
+                    action = self.gesture_mapper.execute(confirmed_gesture)
+
+                    # Emit mode change signals
+                    if action == "drawing":
+                        self.mode_changed.emit("drawing")
+                    elif action == "normal":
+                        self.mode_changed.emit("normal")
+
+                    # Emit drawing mode gesture commands
+                    if action in ["clear_canvas", "pen_up", "pen_down", "change_color",
+                                  "brush_size_up", "save_drawing", "undo", "redo", "erase_mode"]:
+                        print(f"[VISION] emitting command: {action}")
+                        self.gesture_command.emit(action)
+
                     display_gesture = confirmed_gesture
                 else:
                     display_gesture = "stabilizing..."

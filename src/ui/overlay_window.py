@@ -12,10 +12,7 @@ class OverlayWindow(QMainWindow):
     def __init__(self):
         super().__init__()
 
-        # 1. Fullscreen transparent window on top of everything
-        self.showFullScreen()
-
-        # 2. Window flags
+        # 1. Window flags
         self.setWindowFlags(
             Qt.WindowType.FramelessWindowHint |
             Qt.WindowType.WindowStaysOnTopHint |
@@ -23,8 +20,11 @@ class OverlayWindow(QMainWindow):
             Qt.WindowType.Tool
         )
 
-        # 3. Translucent background
+        # 2. Translucent background
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+
+        # 3. Fullscreen transparent window on top of everything
+        self.showFullScreen()
 
         # 4. Create QPixmap canvas buffer same size as screen
         screen_geometry = QApplication.primaryScreen().geometry()
@@ -67,17 +67,8 @@ class OverlayWindow(QMainWindow):
         self.vision_thread = VisionThread()
         self.vision_thread.point_detected.connect(self.update_trail)
         self.vision_thread.gesture_detected.connect(self.update_gesture_hud)
-        
-        # Connect requested signals safely in case they aren't implemented yet
-        try:
-            self.vision_thread.gesture_mapper.mode_changed.connect(self.update_system_mode)
-        except AttributeError:
-            pass
-
-        try:
-            self.vision_thread.gesture_command.connect(self.handle_gesture_command)
-        except AttributeError:
-            pass
+        self.vision_thread.gesture_command.connect(self.handle_gesture_command)
+        self.vision_thread.mode_changed.connect(self.update_system_mode)
 
         self.vision_thread.start()
 
@@ -99,6 +90,7 @@ class OverlayWindow(QMainWindow):
         self.update()
 
     def handle_gesture_command(self, command):
+        print(f"[OVERLAY] received command: {command}")
         if command == "clear_canvas":
             self.save_to_undo()
             self.canvas.fill(Qt.GlobalColor.transparent)
@@ -150,6 +142,7 @@ class OverlayWindow(QMainWindow):
         current_point = QPoint(mapped_x, mapped_y)
 
         if self.is_drawing:
+            print(f"[OVERLAY] drawing at: {mapped_x}, {mapped_y}")
             if self.last_point is None:
                 self.save_to_undo()
             
