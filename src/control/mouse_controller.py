@@ -4,14 +4,13 @@ import time
 
 class MouseController:
     def __init__(self, smoothing_factor=0.5):
+        pyautogui.FAILSAFE = False
         self.screen_width, self.screen_height = pyautogui.size()
-        pyautogui.FAILSAFE = True
         pyautogui.PAUSE = 0.01
         self.smoothing_factor = smoothing_factor
         self.prev_x = None
         self.prev_y = None
         self.last_click_time = 0
-        self.last_right_click_time = 0
 
     def move(self, x, y, frame_width, frame_height, speed_multiplier=1.0):
         screen_x = int((x / frame_width) * self.screen_width)
@@ -51,21 +50,3 @@ class MouseController:
         if current_time - self.last_click_time >= cooldown:
             pyautogui.click()
             self.last_click_time = current_time
-
-    def right_click(self):
-        current_time = time.time()
-        if current_time - self.last_right_click_time >= 1.0:
-            pyautogui.rightClick()
-            self.last_right_click_time = current_time
-
-    def scroll(self, direction):
-        """
-        Scroll the mouse wheel.
-
-        Args:
-            direction: "up" or "down"
-        """
-        if direction == "up":
-            pyautogui.scroll(100)
-        elif direction == "down":
-            pyautogui.scroll(-100)

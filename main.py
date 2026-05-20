@@ -3,7 +3,6 @@ import sys
 os.environ["QT_LOGGING_RULES"] = "*.debug=false;qt.qpa.*=false"
 os.environ["QT_ENABLE_HIGHDPI_SCALING"] = "0"
 os.environ["QT_SCALE_FACTOR"] = "1"
-sys.stderr = open(os.devnull, 'w')
 
 import warnings
 from PyQt6.QtWidgets import QApplication

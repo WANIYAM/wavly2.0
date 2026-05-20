@@ -1,5 +1,4 @@
 # Wavly 2.0
-
 **AI-Powered Touchless Computer Control System**
 
 Control your computer with hand gestures using computer vision and machine learning. No physical contact required.
@@ -7,7 +6,6 @@ Control your computer with hand gestures using computer vision and machine learn
 ---
 
 ## Overview
-
 Wavly is an intelligent gesture recognition system that translates hand movements into computer actions. Using a standard webcam, MediaPipe hand tracking, and machine learning, Wavly enables touchless control of your mouse, keyboard, and system functions through natural hand gestures.
 
 The system captures real-time video, detects hand landmarks, classifies gestures using a trained machine learning model, and executes corresponding system actions (such as cursor control, application hotkeys, and mode switching) with PyAutoGUI automation.
@@ -16,17 +14,22 @@ The system captures real-time video, detects hand landmarks, classifies gestures
 
 ## Project Status
 
-### **Current Phase: Phases 1-3 & 5 Complete ✓**
-
 ### Completed Phases
-- **✅ Phase 1: Core Hand Tracking & Gesture Detection** - MediaPipe integration, hand landmark tracking, and normalized coordinate processing.
-- **✅ Phase 2: Gesture Classification & Action Mapping** - Mapping raw hand landmarks to actions, and execution interface using PyAutoGUI.
-- **✅ Phase 3: ML Model Training & Data Collection Pipeline** - Custom data recording utility and trainer script generating a RandomForest classifier.
-- **✅ Phase 5: Settings Panel & Gesture Customization / Profiles** - Context-aware application profiles (Chrome, VLC, PowerPoint) and dual-mode system (Normal & Drawing).
+- **✅ Phase 1 — Foundation**: Core MediaPipe tracking integration, hand landmark parsing, and normalized coordinate processing.
+- **✅ Phase 2 — Mouse Control**: Cursor movement tracking, coordinate smoothing (exponential weighted moving average), and click handling.
+- **✅ Phase 3 — Gesture Recognition (99.66% accuracy)**: Custom gesture classifier utilizing a RandomForest classifier model trained on a 10-gesture dataset.
+- **✅ Phase 5 — Context Awareness**: Dynamic detection of foreground active windows and context-sensitive application profiles.
+- **✅ Phase 6 — UI Overlay**: Transparent overlay drawing canvas (Drawing Mode) with custom painter tools (brush size, colors, erase, undo/redo).
+- **✅ Phase 8 — Presentation Mode**: Custom PowerPoint presentation control actions with transition delays.
 
-### Coming Soon / Remaining
-- **🚧 Phase 4: PyQt6 GUI Interface with Live Camera Feed** - Transparent overlay and drawing UI (initial version implemented as `OverlayWindow`).
-- **🚧 Phase 6: Performance Optimization & Testing** - Multi-thread coordination, prediction smoothing, and resource leak cleanup.
+### Coming Soon
+- **🚧 Voice Hybrid**: Integrating voice command recognition alongside hand gestures for hybrid inputs.
+- **🚧 Air Drawing**: Advanced 3D drawing paths and gesture-based shape recognition.
+
+---
+
+## Project Health
+- **Score: 8.5 / 10**
 
 ---
 
@@ -82,33 +85,16 @@ Wavly automatically detects the active foreground application and switches gestu
 
 ---
 
-## Drawing Mode Gestures
-
-When in the default profile, hold the **`two_fingers`** gesture for 2 seconds to toggle **Drawing Mode** on a fullscreen PyQt6 canvas. Exit by performing the **`pinch`** gesture.
-
-- **`point`** → Pen down (draw on canvas)
-- **`open_hand`** → Pen up (hover without drawing)
-- **`two_fingers`** → Cycle brush colors
-- **`three_fingers`** → Increase brush size
-- **`l_shape`** → Toggle eraser mode
-- **`thumbs_up`** → Undo last stroke
-- **`thumbs_down`** → Redo stroke
-- **`fist`** → Clear canvas
-- **`four_fingers`** → Save drawing
-- **`pinch`** → Exit Drawing Mode (return to Normal cursor control)
-
----
-
 ## Tech Stack & Versions
 
-- **Python 3.10+**
-- **opencv-python** == `4.13.0.92` (Video capture and image processing)
+- **Python 3.12.10**
 - **mediapipe** == `0.10.14` (Real-time hand tracking and landmark extraction)
-- **pyautogui** == `0.9.54` (System automation and hotkey execution)
-- **scikit-learn** == `1.8.0` (Machine learning for gesture classification)
-- **pyqt6** == `6.11.0` (GUI application overlay and canvas painting)
+- **opencv-python** == `4.13.0.92` (Video capture and image processing)
 - **numpy** == `2.4.0` (Array manipulations and coordinates processing)
 - **pandas** == `2.2.3` (Dataset formatting and CSV loading)
+- **scikit-learn** == `1.8.0` (Machine learning for gesture classification)
+- **PyQt6** == `6.11.0` (GUI application overlay and canvas painting)
+- **PyAutoGUI** == `0.9.54` (System automation and hotkey execution)
 
 ---
 
@@ -179,6 +165,20 @@ This trains a `RandomForestClassifier` using features from `data/gestures.csv` a
 
 ---
 
+## Diagnostic Tools
+
+You can verify separate components using the following test utilities:
+* **Active Window Context Detection Check**:
+  ```bash
+  python test_context.py
+  ```
+* **Raw Model Inference & Confidence HUD**:
+  ```bash
+  python test_gestures.py
+  ```
+
+---
+
 ## Project Structure
 
 Here is the complete project directory structure showing all files:
@@ -194,7 +194,7 @@ wavly2.0/
 │   ├── __init__.py
 │   ├── ai/                      # Machine learning components
 │   │   ├── __init__.py
-│   │   ├── data_collector.py   # Normalized landmarks parser and CSV writer
+│   │   ├── data_collector.py    # Buffered landmarks parser and CSV writer
 │   │   ├── predictor.py         # Real-time gesture prediction and confidence checker
 │   │   └── trainer.py           # RandomForest model trainer with validation reports
 │   ├── automation/              # System automation wrappers

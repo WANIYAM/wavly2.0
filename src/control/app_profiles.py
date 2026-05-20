@@ -1,10 +1,7 @@
 import pyautogui
+import time
 
 class AppProfiles:
-    """
-    Defines gesture mapping profiles for different applications,
-    including Chrome, VLC, PowerPoint, and a default system profile.
-    """
     def __init__(self):
         self.profiles = {
             "chrome": {
@@ -34,41 +31,11 @@ class AppProfiles:
                 "thumbs_up": lambda: pyautogui.hotkey('ctrl', '='),
                 "thumbs_down": lambda: pyautogui.hotkey('ctrl', '-'),
                 "three_fingers": lambda: pyautogui.press('b'),
-                "pinch": lambda: pyautogui.press('ctrl'),
+                "pinch": lambda: pyautogui.hotkey('ctrl', 'l'),
             },
-            "default": {
-                "fist": "freeze",
-                "open_hand": "move",
-                "point": "precision",
-                "two_fingers": "scroll",
-                "three_fingers": "open_keyboard",
-                "four_fingers": "screenshot",
-                "thumbs_up": "volume_up",
-                "thumbs_down": "volume_down",
-                "l_shape": "right_click",
-                "pinch": "left_click"
-            }
         }
 
-        # Monkey-patch GestureMapper._get_action_callable to support returning callables directly
-        try:
-            from src.control.gesture_mapper import GestureMapper
-            if not hasattr(GestureMapper, "_original_get_action_callable"):
-                GestureMapper._original_get_action_callable = GestureMapper._get_action_callable
-                def new_get_action_callable(self_gm, action_name):
-                    if callable(action_name):
-                        return action_name
-                    return self_gm._original_get_action_callable(action_name)
-                GestureMapper._get_action_callable = new_get_action_callable
-        except Exception:
-            pass
-
     def get_profile(self, app_name):
-        """
-        Returns the profile dictionary for the given app name.
-        If the app name is not found, returns the default profile dictionary.
-        """
-        if not app_name:
-            return self.profiles["default"]
-        return self.profiles.get(app_name.lower(), self.profiles["default"])
-
+        if not app_name or app_name == "default":
+            return {}
+        return self.profiles.get(app_name.lower(), {})

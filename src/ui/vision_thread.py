@@ -1,7 +1,6 @@
 import cv2
 import time
 import math
-import numpy as np
 import warnings
 from collections import Counter
 from PyQt6.QtCore import QThread, pyqtSignal
@@ -9,7 +8,6 @@ from PyQt6.QtCore import QThread, pyqtSignal
 from src.camera.hand_tracker import HandTracker
 from src.control.mouse_controller import MouseController
 from src.control.gesture_mapper import GestureMapper
-from src.ai.data_collector import DataCollector
 from src.ai.predictor import GesturePredictor
 
 warnings.filterwarnings("ignore")
@@ -25,45 +23,21 @@ class VisionThread(QThread):
     def __init__(self):
         super().__init__()
         self.running = True
-        self.hand_tracker = HandTracker()
+        self.hand_tracker = HandTracker(
+            max_hands=1,
+            detection_confidence=0.7,
+            tracking_confidence=0.7
+        )
         self.mouse_controller = MouseController()
         self.gesture_mapper = GestureMapper()
-        self.data_collector = DataCollector()
         self.gesture_predictor = GesturePredictor()
 
         self.prev_frame_time = 0
         self.fps = 0
-        self.recording = False
-        self.current_gesture_label = None
-        self.frame_count = 0
         self.gesture_buffer = []
         self.unknown_streak = 0
         self.last_logged_gesture = None
         self.pinch_active = False
-
-        # Expose mapping to UI so it can pass keyboard events down
-        self.gesture_mapping = {
-            '0': 'fist',
-            '1': 'open_hand',
-            '3': 'point',
-            '4': 'two_fingers',
-            '5': 'three_fingers',
-            '6': 'four_fingers',
-            '7': 'thumbs_up',
-            '8': 'thumbs_down',
-            '9': 'l_shape'
-        }
-
-    def toggle_recording(self):
-        self.recording = not self.recording
-        if self.recording and self.current_gesture_label:
-            print(f"[RECORD] Recording: {self.current_gesture_label}")
-
-    def set_gesture_label(self, key_str):
-        if key_str in self.gesture_mapping:
-            self.current_gesture_label = self.gesture_mapping[key_str]
-            if self.recording:
-                print(f"[RECORD] Recording: {self.current_gesture_label}")
 
     def stop(self):
         if not self.running:
@@ -98,8 +72,6 @@ class VisionThread(QThread):
 
             # Flip frame horizontally for mirror effect
             frame = cv2.flip(frame, 1)
-            self.frame_count += 1
-
             # Check active app every 2 seconds
             now = time.time()
             if now - self.gesture_mapper.last_app_check >= self.gesture_mapper.app_check_interval:
@@ -125,15 +97,13 @@ class VisionThread(QThread):
             display_gesture = "No Hand"
 
             if landmarks is not None:
-                # Save data if recording mode is ON and gesture label is set
-                if self.recording and self.current_gesture_label is not None:
-                    self.data_collector.save(landmarks.landmark, self.current_gesture_label)
-
                 # Get landmark list and find tips
                 landmark_list = self.hand_tracker.get_landmark_list(landmarks, frame_width, frame_height)
                 index_fingertip = landmark_list[8]
                 index_pip = landmark_list[6]
                 thumb_tip = landmark_list[4]
+
+                self.gesture_mapper.update_hand_position(index_fingertip[1])
 
                 # Emit drawing coordinates to the UI thread
                 self.point_detected.emit(index_fingertip[0], index_fingertip[1])

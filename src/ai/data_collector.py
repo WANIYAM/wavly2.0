@@ -6,6 +6,14 @@ class DataCollector:
     def __init__(self, data_dir="data", filename="gestures.csv"):
         self.data_dir = Path(data_dir)
         self.filepath = self.data_dir / filename
+        self.buffer = []
+        self.buffer_size = 30
+
+    def __del__(self):
+        try:
+            self.flush()
+        except Exception:
+            pass
 
     def save(self, landmark_list, gesture_name):
         """
@@ -31,7 +39,20 @@ class DataCollector:
         # Prepare row: [gesture_name, x1, y1, x2, y2, ..., x21, y21]
         row = [gesture_name] + flattened_landmarks
 
-        # Append to CSV file
+        # Append to buffer
+        self.buffer.append(row)
+
+        # Write to disk if buffer reaches maximum size
+        if len(self.buffer) >= self.buffer_size:
+            self.flush()
+
+    def flush(self):
+        """Force write remaining buffer to CSV file."""
+        if not self.buffer:
+            return
+
+        self.data_dir.mkdir(parents=True, exist_ok=True)
         with open(self.filepath, 'a', newline='') as f:
             writer = csv.writer(f)
-            writer.writerow(row)
+            writer.writerows(self.buffer)
+        self.buffer.clear()

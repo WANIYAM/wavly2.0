@@ -27,7 +27,7 @@ class GestureMapper:
         self.current_app = "default"
         self.last_app_check = 0
         self.app_check_interval = 2.0
-        self.prev_two_fingers_y = None
+        self.current_hand_y = 0
 
     def _can_execute(self, gesture_name):
         now = time.time()
@@ -35,6 +35,8 @@ class GestureMapper:
         if cooldown_name in ["two_fingers_up", "two_fingers_down"]:
             cooldown_name = "two_fingers"
         cooldown = self.gesture_cooldowns.get(cooldown_name, 2.0)
+        if self.current_app == "powerpoint" and cooldown_name in ["two_fingers", "l_shape"]:
+            cooldown = 0.8
         last = self.last_gesture_times.get(gesture_name, 0)
         if now - last >= cooldown:
             self.last_gesture_times[gesture_name] = now
@@ -79,27 +81,6 @@ class GestureMapper:
         else:
             self.two_fingers_start = None
 
-        # Track two_fingers direction using caller's landmark_list
-        if gesture_name == "two_fingers":
-            try:
-                import sys
-                frame = sys._getframe(1)
-                if 'landmark_list' in frame.f_locals:
-                    landmark_list = frame.f_locals['landmark_list']
-                    if landmark_list and len(landmark_list) > 8:
-                        current_y = landmark_list[8][1]
-                        if self.prev_two_fingers_y is not None:
-                            dy = current_y - self.prev_two_fingers_y
-                            if dy < -10:
-                                gesture_name = "two_fingers_up"
-                            elif dy > 10:
-                                gesture_name = "two_fingers_down"
-                        self.prev_two_fingers_y = current_y
-            except Exception:
-                pass
-        else:
-            self.prev_two_fingers_y = None
-
         if not self._can_execute(gesture_name):
             return None
 
@@ -132,54 +113,59 @@ class GestureMapper:
 
         # NORMAL MODE
         else:
-            profile = self.app_profiles.get_profile(self.current_app)
-            if gesture_name in profile and self.current_app != "default":
-                profile[gesture_name]()
-                print(f"[GESTURE] {gesture_name} → {self.current_app} action")
+            if self.current_app != "default":
+                profile = self.app_profiles.get_profile(self.current_app)
+                if gesture_name in profile:
+                    profile[gesture_name]()
+                    print(f"[GESTURE] {gesture_name} → {self.current_app} action")
+                    return "executed"
+
+            # Default mode gestures
+            if gesture_name == "fist":
+                print("[GESTURE] fist → freeze")
+                self.current_mode = "freeze"
+                return "freeze"
+            elif gesture_name == "open_hand":
+                print("[GESTURE] open_hand → move")
+                self.current_mode = "move"
+                return "move"
+            elif gesture_name == "point":
+                print("[GESTURE] point → precision")
+                self.current_mode = "precision"
+                return "precision"
+            elif gesture_name == "two_fingers":
+                if self.current_hand_y < 300:
+                    pyautogui.scroll(3)
+                else:
+                    pyautogui.scroll(-3)
+                print("[GESTURE] two_fingers → scroll")
+                return "scroll"
+            elif gesture_name == "three_fingers":
+                pyautogui.hotkey('win', 'ctrl', 'o')
+                print("[GESTURE] three_fingers → keyboard")
+                return "executed"
+            elif gesture_name == "four_fingers":
+                pyautogui.hotkey('win', 'shift', 's')
+                print("[GESTURE] four_fingers → screenshot")
+                return "executed"
+            elif gesture_name == "thumbs_up":
+                pyautogui.press('volumeup')
+                print("[GESTURE] thumbs_up → volume_up")
+                return "executed"
+            elif gesture_name == "thumbs_down":
+                pyautogui.press('volumedown')
+                print("[GESTURE] thumbs_down → volume_down")
+                return "executed"
+            elif gesture_name == "l_shape":
+                pyautogui.rightClick()
+                print("[GESTURE] l_shape → right_click")
+                return "executed"
+            elif gesture_name == "pinch":
+                pyautogui.click()
+                print("[GESTURE] pinch → left_click")
                 return "executed"
 
         return None
-
-    def _get_action_callable(self, action_name):
-        action_map = {
-            # Chrome actions
-            "scroll_up": lambda: pyautogui.scroll(300),
-            "scroll_down": lambda: pyautogui.scroll(-300),
-            "new_tab": lambda: pyautogui.hotkey('ctrl', 't'),
-            "close_tab": lambda: pyautogui.hotkey('ctrl', 'w'),
-            "forward": lambda: pyautogui.hotkey('alt', 'right'),
-            "back": lambda: pyautogui.hotkey('alt', 'left'),
-            "zoom_in": lambda: pyautogui.hotkey('ctrl', '=' if self.current_app == "chrome" else '+') if self.current_app == "chrome" else (lambda: pyautogui.hotkey('ctrl', '=')),
-            "zoom_out": lambda: pyautogui.hotkey('ctrl', '-'),
-            
-            # VLC actions
-            "play_pause": lambda: pyautogui.press('space'),
-            "seek_forward": lambda: pyautogui.hotkey('shift', 'right'),
-            "seek_backward": lambda: pyautogui.hotkey('shift', 'left'),
-            "volume_up": lambda: pyautogui.press('volumeup'),
-            "volume_down": lambda: pyautogui.press('volumedown'),
-            "fullscreen": lambda: pyautogui.press('f' if self.current_app == "vlc" else 'f5'),
-            "stop": lambda: pyautogui.press('s'),
-            "mute": lambda: pyautogui.press('m'),
-            
-            # PowerPoint actions
-            "next_slide": lambda: pyautogui.press('right'),
-            "previous_slide": lambda: pyautogui.press('left'),
-            "end_slideshow": lambda: pyautogui.press('escape'),
-            "black_screen": lambda: pyautogui.press('b'),
-            "laser_pointer": lambda: pyautogui.hotkey('ctrl', 'l'),
-            
-            # Default actions / Mode switching
-            "freeze": lambda: self._set_mode("freeze"),
-            "move": lambda: self._set_mode("move"),
-            "precision": lambda: self._set_mode("precision"),
-            "scroll": lambda: None,
-            "open_keyboard": lambda: pyautogui.hotkey('win', 'ctrl', 'o'),
-            "screenshot": lambda: pyautogui.hotkey('win', 'shift', 's'),
-            "right_click": lambda: pyautogui.rightClick(),
-            "left_click": lambda: pyautogui.click()
-        }
-        return action_map.get(action_name, lambda: None)
 
     def _set_mode(self, mode):
         self.current_mode = mode
@@ -191,3 +177,6 @@ class GestureMapper:
 
     def is_drawing_mode(self):
         return self.drawing_mode
+
+    def update_hand_position(self, y):
+        self.current_hand_y = y
