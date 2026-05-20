@@ -1,14 +1,7 @@
-# Wavly 2.0
-**AI-Powered Touchless Computer Control System**
+# Wavly — AI-Powered Gesture & Voice Interface
+**Control your computer with hand gestures and voice commands**
 
-Control your computer with hand gestures using computer vision and machine learning. No physical contact required.
-
----
-
-## Overview
-Wavly is an intelligent gesture recognition system that translates hand movements into computer actions. Using a standard webcam, MediaPipe hand tracking, and machine learning, Wavly enables touchless control of your mouse, keyboard, and system functions through natural hand gestures.
-
-The system captures real-time video, detects hand landmarks, classifies gestures using a trained machine learning model, and executes corresponding system actions (such as cursor control, application hotkeys, and mode switching) with PyAutoGUI automation.
+Wavly is an intelligent, touchless user interface system that translates real-time hand movements and spoken voice commands into system automation inputs. Using a standard webcam, MediaPipe hand tracking, PyAudio microphone capture, and machine learning, Wavly maps natural physical interactions to keyboard hotkeys, cursor movements, clicks, and application controls. This enables hands-free operation of browsers, media players, presentation software, and active drawing tools.
 
 ---
 
@@ -21,15 +14,7 @@ The system captures real-time video, detects hand landmarks, classifies gestures
 - **✅ Phase 5 — Context Awareness**: Dynamic detection of foreground active windows and context-sensitive application profiles.
 - **✅ Phase 6 — UI Overlay**: Transparent overlay drawing canvas (Drawing Mode) with custom painter tools (brush size, colors, erase, undo/redo).
 - **✅ Phase 8 — Presentation Mode**: Custom PowerPoint presentation control actions with transition delays.
-
-### Coming Soon
-- **🚧 Voice Hybrid**: Integrating voice command recognition alongside hand gestures for hybrid inputs.
-- **🚧 Air Drawing**: Advanced 3D drawing paths and gesture-based shape recognition.
-
----
-
-## Project Health
-- **Score: 8.5 / 10**
+- **✅ Phase 9 — Voice Integration**: Threaded background speech command listener utilizing Google Web Speech API and PyAudio to trigger system automation.
 
 ---
 
@@ -47,6 +32,33 @@ Wavly recognizes **10 distinct hand gestures**. In the **Default System Profile 
 8. **`four_fingers`** (Label 5) → Take Screenshot (`Win + Shift + S`)
 9. **`thumbs_up`** (Label 6) → Volume Up
 10. **`thumbs_down`** (Label 7) → Volume Down
+
+---
+
+## All 20 Voice Commands
+
+Speak clearly to execute any of the following 20 voice commands:
+
+- **`click`** → Left mouse click
+- **`right click`** → Right mouse click
+- **`scroll up`** → Scroll mouse wheel up (`pyautogui.scroll(5)`)
+- **`scroll down`** → Scroll mouse wheel down (`pyautogui.scroll(-5)`)
+- **`screenshot`** → Take screenshot (`Win + Shift + S`)
+- **`volume up`** → System volume up
+- **`volume down`** → System volume down
+- **`open chrome`** → Launch Google Chrome browser
+- **`open notepad`** → Launch Notepad application
+- **`switch tab`** → Switch application tabs (`Ctrl + Tab`)
+- **`close tab`** → Close active tab (`Ctrl + W`)
+- **`zoom in`** → Zoom page/view in (`Ctrl + =`)
+- **`zoom out`** → Zoom page/view out (`Ctrl + -`)
+- **`new tab`** → Open new application tab (`Ctrl + T`)
+- **`go back`** → Browser/navigation back (`Alt + Left Arrow`)
+- **`go forward`** → Browser/navigation forward (`Alt + Right Arrow`)
+- **`next slide`** → PowerPoint next slide (`Right Arrow`)
+- **`previous slide`** → PowerPoint previous slide (`Left Arrow`)
+- **`start presentation`** → PowerPoint slide show start (`F5`)
+- **`stop presentation`** → PowerPoint exit slide show (`Escape`)
 
 ---
 
@@ -95,6 +107,8 @@ Wavly automatically detects the active foreground application and switches gestu
 - **scikit-learn** == `1.8.0` (Machine learning for gesture classification)
 - **PyQt6** == `6.11.0` (GUI application overlay and canvas painting)
 - **PyAutoGUI** == `0.9.54` (System automation and hotkey execution)
+- **SpeechRecognition** == `3.16.1` (Vocal capture parsing and API interaction)
+- **PyAudio** == `0.2.14` (Interface to PortAudio for input stream handling)
 
 ---
 
@@ -140,7 +154,7 @@ Wavly automatically detects the active foreground application and switches gestu
 
 ## How to Record New Gestures
 
-To collect training dataset for new gestures or to expand existing classes:
+To collect a training dataset for new gestures or to expand existing classes:
 
 ```bash
 python record_gestures.py
@@ -176,6 +190,10 @@ You can verify separate components using the following test utilities:
   ```bash
   python test_gestures.py
   ```
+* **Voice Phrase Transcription Test**:
+  ```bash
+  python test_voice.py
+  ```
 
 ---
 
@@ -207,7 +225,9 @@ wavly2.0/
 │   │   ├── app_profiles.py      # Application specific profiles (Chrome, VLC, PowerPoint)
 │   │   ├── context_detector.py  # Tracks active foreground application
 │   │   ├── gesture_mapper.py    # Maps gestures to profile actions or drawing modes
-│   │   └── mouse_controller.py  # Coordinates screen cursor movement and clicking
+│   │   ├── mouse_controller.py  # Coordinates screen cursor movement and clicking
+│   │   ├── voice_controller.py  # Threaded background speech listener
+│   │   └── voice_mapper.py      # Maps verbal keywords to PyAutoGUI/OS actions
 │   ├── gesture_recognition/     # Core gesture module init
 │   │   └── __init__.py
 │   ├── gestures/                # Geometric gesture definitions
@@ -215,7 +235,7 @@ wavly2.0/
 │   ├── ui/                      # PyQt6 user interface components
 │   │   ├── __init__.py
 │   │   ├── overlay_window.py    # Fullscreen overlay painting canvas
-│   │   └── vision_thread.py     # Worker thread for non-blocking camera/hand tracking
+│   │   └── vision_thread.py     # Worker thread for camera loop & voice processing
 │   └── utils/                   # General helper utilities
 │       └── __init__.py
 ├── tests/                       # Testing module directory (currently empty)
@@ -227,8 +247,15 @@ wavly2.0/
 ├── record_gestures.py           # Gesture dataset recording utility
 ├── requirements.txt             # Pinned project dependencies
 ├── test_context.py              # Debug utility to test active app detection
-└── test_gestures.py             # Debug utility to display raw gesture prediction confidence
+├── test_gestures.py             # Debug utility to display raw gesture prediction confidence
+└── test_voice.py                # Debug utility to test microphone voice recognition
 ```
+
+---
+
+## Coming Soon
+- **🚧 Voice Hybrid**: Combining spoken commands with hand position tracking for multi-modal context inputs.
+- **🚧 Air Drawing**: Full 3D path drawing coordinates and vocal shape stroke tools.
 
 ---
 

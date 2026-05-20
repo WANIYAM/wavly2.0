@@ -9,6 +9,8 @@ from src.camera.hand_tracker import HandTracker
 from src.control.mouse_controller import MouseController
 from src.control.gesture_mapper import GestureMapper
 from src.ai.predictor import GesturePredictor
+from src.control.voice_controller import VoiceController
+from src.control.voice_mapper import VoiceMapper
 
 warnings.filterwarnings("ignore")
 
@@ -31,6 +33,8 @@ class VisionThread(QThread):
         self.mouse_controller = MouseController()
         self.gesture_mapper = GestureMapper()
         self.gesture_predictor = GesturePredictor()
+        self.voice_controller = VoiceController()
+        self.voice_mapper = VoiceMapper()
 
         self.prev_frame_time = 0
         self.fps = 0
@@ -43,6 +47,7 @@ class VisionThread(QThread):
         if not self.running:
             return
         self.running = False
+        self.voice_controller.stop()
         self.wait()
         self.hand_tracker.close()
 
@@ -63,6 +68,9 @@ class VisionThread(QThread):
             self.app_changed.emit(initial_app)
         except Exception as e:
             print(f"[VISION] Error getting initial app: {e}")
+
+        self.voice_controller.start()
+        print("[VOICE] Voice control started")
 
         while self.running:
             ret, frame = cap.read()
@@ -201,10 +209,15 @@ class VisionThread(QThread):
                     self.mouse_controller.move(index_fingertip[0], index_fingertip[1],
                                               frame_width, frame_height, speed_multiplier)
 
-                # Emit gesture detected
+                 # Emit gesture detected
                 self.gesture_detected.emit(display_gesture)
             else:
                 self.gesture_detected.emit("No Hand")
+
+            # Process voice commands
+            while not self.voice_controller.command_queue.empty():
+                voice_cmd = self.voice_controller.command_queue.get()
+                self.voice_mapper.execute(voice_cmd)
 
             # Small sleep to prevent 100% thread usage on fast loops
             self.msleep(5)
