@@ -4,17 +4,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Wavly is an AI-powered touchless computer control system that uses hand gestures and computer vision to control a computer. The system captures webcam input, processes hand gestures using MediaPipe, and translates them into automated actions using PyAutoGUI.
+Wavly is an AI-powered touchless computer control system that uses hand gestures, computer vision, and voice commands to control a computer. The system captures webcam input, processes hand gestures using MediaPipe, classifies gestures using a Random Forest model, listens for voice triggers, and translates inputs into automated system actions using PyAutoGUI.
 
 ## Tech Stack
 
-- **Python 3.10+** - Core language
+- **Python 3.12+** - Core language
 - **OpenCV** - Video capture and image processing
 - **MediaPipe** - Hand landmark detection and tracking
 - **PyAutoGUI** - System automation (mouse, keyboard control)
-- **scikit-learn** - Gesture classification and ML models
-- **PyQt6** - GUI framework for control interface
-- **NumPy** - Numerical operations and array processing
+- **scikit-learn** - Gesture classification (Random Forest)
+- **PyQt6** - GUI framework for transparent overlays and HUD interface
+- **NumPy & Pandas** - Numerical operations and dataset handling
+- **SpeechRecognition & pyttsx3** - Speech-to-text recognition and text-to-speech feedback
 
 ## Development Setup
 
@@ -34,10 +35,19 @@ pip install -r requirements.txt
 python main.py
 ```
 
-### Testing
+### Testing & Diagnostics
 ```bash
-# When tests are added
-pytest tests/
+# Test raw gesture predictions with live video stream
+python test_gestures.py
+
+# Test active application context detection
+python test_context.py
+
+# Test microphone integration
+python test_voice.py
+
+# Test Text-To-Speech engine
+python test_tts.py
 ```
 
 ## Project Architecture
@@ -46,108 +56,64 @@ pytest tests/
 
 ```
 src/
-├── gesture_recognition/  # Hand tracking and gesture detection
-│   ├── hand_tracker.py      # MediaPipe hand tracking wrapper
-│   ├── gesture_classifier.py # ML-based gesture classification
-│   └── gesture_config.py     # Gesture definitions and mappings
-├── ui/                    # PyQt6 GUI components
-│   ├── main_window.py        # Main application window
-│   ├── camera_widget.py      # Webcam feed display
-│   └── settings_dialog.py    # Configuration UI
-├── automation/            # System automation logic
-│   ├── action_executor.py    # PyAutoGUI action wrapper
-│   └── gesture_mapper.py     # Maps gestures to actions
-└── utils/                 # Helper functions
-    ├── camera.py             # Camera initialization and management
-    └── config_loader.py      # Configuration file handling
+├── ai/                 # Gesture classification and model training
+│   ├── data_collector.py  # Script/class to collect and log normalized training data to CSV
+│   ├── predictor.py       # Wrapper for the trained ML model predictions
+│   └── trainer.py         # Script to train and export the scikit-learn model
+├── camera/             # Webcam and computer vision tracking
+│   └── hand_tracker.py    # MediaPipe hand detection wrapper
+├── control/            # Automation mapping and execution
+│   ├── app_profiles.py    # App-specific gesture mapping profiles (Chrome, VLC, PowerPoint)
+│   ├── context_detector.py # Identifies the currently active window/application
+│   ├── gesture_mapper.py  # Translates confirmed gestures to system automation actions depending on mode
+│   ├── mouse_controller.py# Handles PyAutoGUI-based cursor movement and smooth tracking
+│   ├── voice_controller.py# Background thread listening and parsing voice commands
+│   ├── voice_mapper.py    # Executes PyAutoGUI actions for recognized voice commands
+│   └── voice_responder.py # Multi-threaded Text-To-Speech engine using pyttsx3/PowerShell fallback
+└── ui/                 # PyQt6 user interface components
+    ├── overlay_window.py  # Transparent PyQt6 overlay UI / HUD for drawing, modes, and HUD displays
+    └── vision_thread.py   # Background thread handling camera input, prediction filtering, and control signals
 ```
 
 ### Key Design Patterns
 
-1. **Pipeline Architecture**: Webcam → Hand Detection → Gesture Recognition → Action Execution
+1. **Pipeline Architecture**: Webcam → MediaPipe Landmarks → Coordinate Normalization → Random Forest Classifier → Buffer confirmation → Action Execution
 2. **Separation of Concerns**: 
-   - `gesture_recognition/` handles CV and ML
-   - `automation/` handles system control
-   - `ui/` handles user interface
-3. **Configuration-Driven**: Gesture-to-action mappings stored in `config/` for easy customization
+   - `src/ai/` and `src/camera/` handle hand tracking and machine learning classification.
+   - `src/control/` handles operating system control, mapping, and voice assistance.
+   - `src/ui/` handles transparent drawing overlay canvas and cyberpunk HUD.
+3. **Multi-Threading**:
+   - PyQt6 main thread coordinates overlay rendering and canvas drawing.
+   - `VisionThread` processes heavy camera capture and predictions.
+   - `VoiceController` handles blocking speech recognition in the background.
+   - `VoiceResponder` manages background audio queues to ensure zero lag in frame loops.
 
 ### Data Flow
 
-1. Camera captures frame (OpenCV)
-2. MediaPipe detects hand landmarks
-3. Gesture classifier identifies gesture from landmarks
-4. Gesture mapper translates gesture to action
-5. Action executor performs system automation (PyAutoGUI)
-6. UI displays feedback to user
+1. Webcam frame is read by the `VisionThread` using OpenCV.
+2. `HandTracker` extracts hand landmark objects.
+3. Landmark coordinates are normalized relative to the wrist (landmark 0) to support position-invariant predictions.
+4. `GesturePredictor` feeds the coordinates into the Random Forest model.
+5. `VisionThread` uses a 10-frame buffer (6/10 votes) to confirm predictions.
+6. `GestureMapper` maps predictions to PyAutoGUI movements or keys, checking active window context via `ContextDetector`.
+7. `OverlayWindow` updates drawing lines or modes and animates the bottom-right HUD overlay.
 
 ## Development Guidelines
 
 ### Adding New Gestures
 
-1. Define gesture in `src/gesture_recognition/gesture_config.py`
-2. Add training data or detection logic in `gesture_classifier.py`
-3. Map gesture to action in `src/automation/gesture_mapper.py`
-4. Test with `python main.py`
-
-### Camera and MediaPipe
-
-- MediaPipe hands model runs on CPU by default
-- For better performance, consider GPU acceleration
-- Camera resolution affects processing speed (default: 640x480)
-- Hand detection confidence threshold: 0.5 (adjustable)
+1. Open a terminal and run `python record_gestures.py` to capture live normalized landmark coordinates. Assign numeric keys to labels. This appends data directly to `data/gestures.csv`.
+2. Run `python src/ai/trainer.py` to re-train the Random Forest model and write `data/gesture_model.pkl` to disk.
+3. Map the confirmed gesture to system actions in `src/control/gesture_mapper.py` (and add app-specific mappings in `src/control/app_profiles.py` if needed).
+4. Launch `python main.py` to verify system behavior.
 
 ### System Automation Safety
 
-- PyAutoGUI has built-in failsafe (move mouse to corner to abort)
-- Add delays between actions to prevent system overload
-- Test automation actions in safe environment first
-- Consider adding confirmation dialogs for destructive actions
+- PyAutoGUI has a built-in failsafe (slam mouse pointer into any screen corner to immediately abort).
+- Test keyboard and click automations in a safe test environment first.
 
-### Performance Considerations
+## Data & Models
 
-- Target: 30 FPS for smooth gesture recognition
-- Optimize by reducing frame processing resolution
-- Use frame skipping if needed (process every Nth frame)
-- Profile with `cProfile` if performance issues arise
-
-## Common Commands
-
-```bash
-# Run application
-python main.py
-
-# Install new dependency
-pip install <package>
-pip freeze > requirements.txt
-
-# Run tests (when implemented)
-pytest tests/ -v
-
-# Check code style (if linting added)
-flake8 src/
-black src/
-```
-
-## Configuration
-
-Configuration files in `config/` directory:
-- `gesture_mappings.json` - Maps gestures to system actions
-- `camera_settings.json` - Camera resolution, FPS, device ID
-- `model_config.json` - ML model parameters and paths
-
-## Troubleshooting
-
-### Camera Issues
-- Ensure webcam is not in use by another application
-- Check camera permissions in system settings
-- Try different camera device IDs (0, 1, 2...)
-
-### MediaPipe Issues
-- Ensure good lighting for hand detection
-- Keep hand within camera frame
-- Adjust detection confidence threshold if needed
-
-### PyAutoGUI Issues
-- Disable failsafe for testing: `pyautogui.FAILSAFE = False`
-- Add delays between actions: `pyautogui.PAUSE = 0.1`
-- Test on secondary monitor if available
+Data and serialized model files are stored in the `data/` directory:
+- `data/gestures.csv` - Labeled hand landmark datasets containing coordinate features.
+- `data/gesture_model.pkl` - Serialized scikit-learn Random Forest classifier model.

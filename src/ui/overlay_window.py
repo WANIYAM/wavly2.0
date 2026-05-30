@@ -1,7 +1,9 @@
 import os
+import time
+import math
 from datetime import datetime
 from PyQt6.QtWidgets import QMainWindow, QApplication
-from PyQt6.QtCore import Qt, QPoint, QTimer, QStandardPaths
+from PyQt6.QtCore import Qt, QPoint, QTimer, QStandardPaths, QRectF
 from PyQt6.QtGui import QPainter, QPen, QColor, QPixmap, QFont
 
 from src.ui.vision_thread import VisionThread
@@ -65,6 +67,17 @@ class OverlayWindow(QMainWindow):
         self.hud_fade_timer.timeout.connect(self.fade_hud)
         self.hud_fade_timer.start(3000)
 
+        self.voice_status = "STANDBY"
+
+        # Animation properties for the Arc Reactor HUD
+        self.pulse_angle = 0.0      # Rotation angle for segments
+        self.pulse_val = 0.0        # Breathing pulse intensity (0.0 -> 1.0)
+        
+        # Continuous animation timer (approx. 33 FPS)
+        self.animation_timer = QTimer()
+        self.animation_timer.timeout.connect(self.update_animation)
+        self.animation_timer.start(30)
+
         # Connect to VisionThread
         self.vision_thread = VisionThread()
         self.vision_thread.point_detected.connect(self.update_trail)
@@ -72,6 +85,7 @@ class OverlayWindow(QMainWindow):
         self.vision_thread.gesture_command.connect(self.handle_gesture_command)
         self.vision_thread.mode_changed.connect(self.update_system_mode)
         self.vision_thread.app_changed.connect(self.update_app_hud)
+        self.vision_thread.voice_status_changed.connect(self.update_voice_status)
 
         self.vision_thread.start()
 
@@ -89,6 +103,28 @@ class OverlayWindow(QMainWindow):
 
     def fade_hud(self):
         self.hud_opacity = 0.3
+        self.update()
+
+    def update_voice_status(self, status):
+        self.voice_status = status
+        self.hud_opacity = 1.0
+        self.hud_fade_timer.start(3000)
+        self.update()
+
+    def update_animation(self):
+        if self.voice_status == "ACTIVE":
+            self.pulse_angle = (self.pulse_angle + 6) % 360
+        else:
+            self.pulse_angle = (self.pulse_angle + 1.5) % 360
+
+        if self.voice_status == "ACTIVE":
+            pulse_speed = 0.15
+        elif self.voice_status == "LISTENING":
+            pulse_speed = 0.05
+        else:
+            pulse_speed = 0.02
+            
+        self.pulse_val = abs(math.sin(time.time() * pulse_speed * 10))
         self.update()
 
     def update_system_mode(self, mode):
@@ -191,45 +227,159 @@ class OverlayWindow(QMainWindow):
     def draw_hud(self, painter):
         # HUD size and position (bottom right corner)
         hud_width = 280
-        hud_height = 160
+        hud_height = 190
         margin = 30
         hud_x = self.screen_width - hud_width - margin
         hud_y = self.screen_height - hud_height - margin
 
-        # Background rounded rectangle (semi-transparent dark background)
-        painter.setBrush(QColor(15, 15, 15, 200))
+        hud_rect = QRectF(hud_x, hud_y, hud_width, hud_height)
+
+        # Background rounded rectangle (deep navy)
+        painter.setBrush(QColor(0, 10, 30, 220))
         painter.setPen(Qt.PenStyle.NoPen)
-        painter.drawRoundedRect(hud_x, hud_y, hud_width, hud_height, 12.0, 12.0)
+        painter.drawRoundedRect(hud_rect, 12.0, 12.0)
+
+        # Add border around HUD (electric blue)
+        painter.setPen(QPen(QColor(0, 150, 255, 200), 1))
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.drawRoundedRect(hud_rect, 12.0, 12.0)
 
         # Padding content offsets
         content_x = hud_x + 15
+        current_y = hud_y + 12
 
-        # 1. Gesture Name (16px bold white)
-        painter.setFont(QFont("Segoe UI", 16, QFont.Weight.Bold))
-        painter.setPen(QColor(255, 255, 255))
-        painter.drawText(content_x, hud_y + 15 + 22, f"Gesture: {self.current_gesture}")
+        # 0. Title "WAVLY" at top in gold color
+        painter.setFont(QFont("Segoe UI", 12, QFont.Weight.Bold))
+        painter.setPen(QColor(255, 200, 0)) # Accent: Gold
+        painter.drawText(int(content_x), int(current_y + 18), "WAVLY")
 
-        # 2. Mode (13px colored text: Green for NORMAL, Blue for DRAWING)
-        painter.setFont(QFont("Segoe UI", 13, QFont.Weight.Bold))
+        # Thin blue horizontal line separator under title
+        current_y += 24
+        painter.setPen(QPen(QColor(0, 150, 255, 100), 1))
+        painter.drawLine(int(content_x), int(current_y), int(hud_x + hud_width - 15), int(current_y))
+
+        current_y += 10
+
+        # 1. Gesture Name (cyan text)
+        painter.setFont(QFont("Segoe UI", 12, QFont.Weight.Bold))
+        painter.setPen(QColor(0, 200, 255)) # Cyan
+        painter.drawText(int(content_x), int(current_y + 16), f"Gesture: {self.current_gesture}")
+        current_y += 24
+
+        # 2. Mode (NORMAL: green, DRAWING: blue)
+        painter.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
         if self.system_mode == "DRAWING":
-            painter.setPen(QColor(52, 152, 219)) # Blue
+            painter.setPen(QColor(0, 150, 255)) # Mode DRAWING: blue
         else:
-            painter.setPen(QColor(46, 204, 113)) # Green
-        painter.drawText(content_x, hud_y + 15 + 22 + 28, f"Mode: {self.system_mode}")
+            painter.setPen(QColor(0, 255, 150)) # Mode NORMAL: green
+        painter.drawText(int(content_x), int(current_y + 16), f"Mode: {self.system_mode}")
+        current_y += 24
 
-        # 3. Active App Name (12px light gray)
-        painter.setFont(QFont("Segoe UI", 12))
-        painter.setPen(QColor(200, 200, 200))
-        painter.drawText(content_x, hud_y + 15 + 22 + 28 + 26, f"Active App: {self.active_app_name.lower()}")
-
-        # 4. Small Hint Text (10px gray)
+        # 3. Active App Name (cyan text)
         painter.setFont(QFont("Segoe UI", 10))
-        painter.setPen(QColor(150, 150, 150))
+        painter.setPen(QColor(0, 200, 255)) # Cyan
+        painter.drawText(int(content_x), int(current_y + 15), f"Active App: {self.active_app_name.lower()}")
+        current_y += 22
+
+        # 4. Show voice status
+        painter.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
+        status = getattr(self, 'voice_status', 'STANDBY')
+        if status == "LISTENING":
+            painter.setPen(QColor(0, 200, 255)) # Cyan
+            status_text = "VOICE: LISTENING"
+        elif status == "ACTIVE":
+            painter.setPen(QColor(0, 255, 150)) # Green
+            status_text = "VOICE: ACTIVE"
+        else:
+            painter.setPen(QColor(150, 150, 150)) # Gray
+            status_text = "VOICE: STANDBY"
+        painter.drawText(int(content_x), int(current_y + 15), status_text)
+
+        # 5. Small Hint Text (9px gray)
+        painter.setFont(QFont("Segoe UI", 9))
+        painter.setPen(QColor(120, 130, 150))
         if self.system_mode == "DRAWING":
             hint_text = "Hint: Pinch to exit drawing"
         else:
             hint_text = "Hint: Hold 2-fingers to draw"
-        painter.drawText(content_x, hud_y + 160 - 15 - 2, hint_text)
+        painter.drawText(int(content_x), int(hud_y + hud_height - 12), hint_text)
+
+        # Draw the holographic Arc Reactor on the right side of the HUD
+        self.draw_arc_reactor(painter, hud_x + hud_width - 55, hud_y + 85, 30)
+
+    def draw_arc_reactor(self, painter, cx, cy, r):
+        # Save painter state
+        painter.save()
+        
+        status = getattr(self, 'voice_status', 'STANDBY')
+        
+        # Determine colors based on status
+        if status == "ACTIVE":
+            color_outer = QColor(255, 200, 0, 200) # Gold
+            color_inner = QColor(0, 255, 255, int(150 + 105 * self.pulse_val)) # Bright pulsating Cyan
+            color_core = QColor(255, 255, 255, int(180 + 75 * self.pulse_val)) # Pure white core
+            outer_pen_width = 3
+        elif status == "LISTENING":
+            color_outer = QColor(0, 150, 255, 180) # Cyber Blue
+            color_inner = QColor(0, 200, 255, int(100 + 100 * self.pulse_val)) # Cyber Cyan
+            color_core = QColor(0, 255, 255, 150)
+            outer_pen_width = 2
+        else: # STANDBY
+            color_outer = QColor(100, 110, 130, 100) # Muted gray
+            color_inner = QColor(0, 150, 255, int(50 + 50 * self.pulse_val))
+            color_core = QColor(0, 150, 255, 80)
+            outer_pen_width = 1.5
+
+        # 1. Draw glowing background aura
+        glow_rad = r + 10
+        painter.setPen(Qt.PenStyle.NoPen)
+        for i in range(5):
+            alpha = int((15 - i * 3) * (0.5 + 0.5 * self.pulse_val))
+            painter.setBrush(QColor(color_inner.red(), color_inner.green(), color_inner.blue(), alpha))
+            painter.drawEllipse(QPoint(int(cx), int(cy)), int(glow_rad - i * 2), int(glow_rad - i * 2))
+
+        # 2. Draw outer rotating segmented ring
+        pen_outer = QPen(color_outer, outer_pen_width)
+        pen_outer.setCapStyle(Qt.PenCapStyle.RoundCap)
+        painter.setPen(pen_outer)
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        
+        # 4 segments, each 60 degrees, separated by 30 degree gaps
+        for angle_offset in [0, 90, 180, 270]:
+            start_angle = int((self.pulse_angle + angle_offset) * 16)
+            span_angle = int(60 * 16)
+            painter.drawArc(
+                int(cx - r), int(cy - r), int(r * 2), int(r * 2),
+                start_angle, span_angle
+            )
+
+        # 3. Draw inner breathing ring
+        r_inner = r - 8
+        pen_inner = QPen(color_inner, 2, Qt.PenStyle.DashLine)
+        painter.setPen(pen_inner)
+        painter.drawEllipse(QPoint(int(cx), int(cy)), int(r_inner), int(r_inner))
+
+        # 4. Draw energetic core rays (in ACTIVE status)
+        if status == "ACTIVE":
+            pen_ray = QPen(QColor(0, 255, 255, 120), 1)
+            painter.setPen(pen_ray)
+            for i in range(8):
+                angle_rad = math.radians(self.pulse_angle + i * 45)
+                # Rays extending from core to inner ring
+                x1 = cx + math.cos(angle_rad) * 4
+                y1 = cy + math.sin(angle_rad) * 4
+                x2 = cx + math.cos(angle_rad) * (r_inner - 2)
+                y2 = cy + math.sin(angle_rad) * (r_inner - 2)
+                painter.drawLine(int(x1), int(y1), int(x2), int(y2))
+
+        # 5. Draw bright core
+        core_r = 4 if status == "ACTIVE" else 3
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(color_core)
+        painter.drawEllipse(QPoint(int(cx), int(cy)), int(core_r), int(core_r))
+
+        # Restore painter state
+        painter.restore()
 
     def keyPressEvent(self, event):
         if event.key() == Qt.Key.Key_C:

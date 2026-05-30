@@ -11,6 +11,7 @@ from src.control.gesture_mapper import GestureMapper
 from src.ai.predictor import GesturePredictor
 from src.control.voice_controller import VoiceController
 from src.control.voice_mapper import VoiceMapper
+from src.control.voice_responder import VoiceResponder
 
 warnings.filterwarnings("ignore")
 
@@ -21,6 +22,7 @@ class VisionThread(QThread):
     gesture_command = pyqtSignal(str)
     mode_changed = pyqtSignal(str)
     app_changed = pyqtSignal(str)
+    voice_status_changed = pyqtSignal(str)
 
     def __init__(self):
         super().__init__()
@@ -33,8 +35,10 @@ class VisionThread(QThread):
         self.mouse_controller = MouseController()
         self.gesture_mapper = GestureMapper()
         self.gesture_predictor = GesturePredictor()
-        self.voice_controller = VoiceController()
-        self.voice_mapper = VoiceMapper()
+        self.voice_responder = VoiceResponder()
+        self.voice_responder.start()
+        self.voice_controller = VoiceController(voice_responder=self.voice_responder)
+        self.voice_mapper = VoiceMapper(voice_responder=self.voice_responder)
 
         self.prev_frame_time = 0
         self.fps = 0
@@ -42,14 +46,15 @@ class VisionThread(QThread):
         self.unknown_streak = 0
         self.last_logged_gesture = None
         self.pinch_active = False
+        self.last_voice_status = "STANDBY"
 
     def stop(self):
         if not self.running:
             return
         self.running = False
+        # Stop both voice controller and responder gracefully
         self.voice_controller.stop()
-        self.wait()
-        self.hand_tracker.close()
+        self.voice_responder.stop()
 
     def run(self):
         cap = cv2.VideoCapture(0)
@@ -59,6 +64,7 @@ class VisionThread(QThread):
             return
 
         print("[CAMERA] Webcam started")
+        self.voice_responder.greet()
 
         # Emit initial active app
         try:
@@ -124,7 +130,7 @@ class VisionThread(QThread):
 
                 # Add prediction to buffer
                 self.gesture_buffer.append(predicted_gesture)
-                if len(self.gesture_buffer) > 7:
+                if len(self.gesture_buffer) > 10:
                     self.gesture_buffer.pop(0)
 
                 # Count votes
@@ -137,17 +143,17 @@ class VisionThread(QThread):
                 else:
                     self.unknown_streak = 0
 
-                # Only clear buffer after 3 consecutive unknowns
-                if self.unknown_streak >= 3:
+                # Only clear buffer after 5 consecutive unknowns
+                if self.unknown_streak >= 5:
                     self.gesture_buffer = []
                     self.unknown_streak = 0
 
-                # Confirm gesture if 5 out of 7 votes
-                confirmed_gesture = most_common_gesture if vote_count >= 5 and most_common_gesture != "unknown" else None
+                # Confirm gesture if 6 out of 10 votes
+                confirmed_gesture = most_common_gesture if vote_count >= 6 and most_common_gesture != "unknown" else None
                 is_confirmed = confirmed_gesture is not None
 
                 if is_confirmed and confirmed_gesture != self.last_logged_gesture:
-                    print(f"[BUFFER] confirmed: {confirmed_gesture} ({vote_count}/7 votes)")
+                    print(f"[BUFFER] confirmed: {confirmed_gesture} ({vote_count}/10 votes)")
                     self.last_logged_gesture = confirmed_gesture
 
                 # Pinch detection
@@ -218,6 +224,18 @@ class VisionThread(QThread):
             while not self.voice_controller.command_queue.empty():
                 voice_cmd = self.voice_controller.command_queue.get()
                 self.voice_mapper.execute(voice_cmd)
+
+            # Check and emit voice status if changed
+            current_voice_status = "STANDBY"
+            if self.voice_controller.running:
+                if self.voice_controller.activated:
+                    current_voice_status = "ACTIVE"
+                else:
+                    current_voice_status = "LISTENING"
+
+            if current_voice_status != self.last_voice_status:
+                self.last_voice_status = current_voice_status
+                self.voice_status_changed.emit(current_voice_status)
 
             # Small sleep to prevent 100% thread usage on fast loops
             self.msleep(5)

@@ -59,27 +59,33 @@ class GestureMapper:
             self.prev_two_fingers_y = None
             return None
 
-        # Skip if same gesture still confirmed
-        if gesture_name == self.last_confirmed_gesture:
-            if gesture_name in ["open_hand", "point", "fist"]:
-                return self.current_mode
-            return None
-        self.last_confirmed_gesture = gesture_name
-
-        # two_fingers hold for drawing mode (before cooldown)
+        # two_fingers hold for drawing mode (before cooldown and before deduplication)
+        two_fingers_mode_trigger = False
         if self.current_app == "default" and not self.drawing_mode and gesture_name == "two_fingers":
             if self.two_fingers_start is None:
                 self.two_fingers_start = time.time()
-                return "scroll"
             elif time.time() - self.two_fingers_start >= 2.0:
                 self.drawing_mode = True
                 self.two_fingers_start = None
                 print("[MODE] Normal → Drawing")
-                return "drawing"
-            else:
-                return "scroll"
+                two_fingers_mode_trigger = True
         else:
             self.two_fingers_start = None
+
+        if two_fingers_mode_trigger:
+            self.last_confirmed_gesture = "drawing"
+            return "drawing"
+
+        # Continuous gestures that bypass deduplication completely
+        continuous_gestures = ["two_fingers", "thumbs_up", "thumbs_down"]
+
+        # Skip if same gesture still confirmed
+        if gesture_name == self.last_confirmed_gesture:
+            if gesture_name in ["open_hand", "point", "fist"]:
+                return self.current_mode
+            if gesture_name not in continuous_gestures:
+                return None
+        self.last_confirmed_gesture = gesture_name
 
         if not self._can_execute(gesture_name):
             return None
