@@ -221,8 +221,12 @@ class VisionThread(QThread):
                 self.gesture_detected.emit("No Hand")
 
             # Process voice commands
+            queue_size = self.voice_controller.command_queue.qsize()
+            if queue_size > 0:
+                print(f"[VISION] Voice queue has {queue_size} commands")
             while not self.voice_controller.command_queue.empty():
                 voice_cmd = self.voice_controller.command_queue.get()
+                print(f"[VISION] Processing voice: {voice_cmd}")
                 self.voice_mapper.execute(voice_cmd)
 
             # Check and emit voice status if changed

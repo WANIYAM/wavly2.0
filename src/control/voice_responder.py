@@ -111,12 +111,23 @@ class VoiceResponder:
                 spoken = False
                 if engine:
                     try:
-                        print(f'[RESPONDER] Speaking (pyttsx3): "{text}"')
+                        print(f"[RESPONDER] About to speak: {text}")
                         engine.say(text)
                         engine.runAndWait()
+                        print(f"[RESPONDER] Finished speaking: {text}")
                         spoken = True
                     except Exception as e:
-                        print(f"[RESPONDER] pyttsx3 speech failed: {e}")
+                        print(f"[RESPONDER] Speech failed: {e}")
+                        try:
+                            engine.stop()
+                            engine = pyttsx3.init()
+                            engine.setProperty('rate', 175)
+                            engine.setProperty('volume', 1.0)
+                            engine.say(text)
+                            engine.runAndWait()
+                            spoken = True
+                        except Exception as e2:
+                            print(f"[RESPONDER] Retry failed: {e2}")
                 
                 # Fallback to PowerShell SpeechSynthesizer if pyttsx3 is not available or failed
                 if not spoken:

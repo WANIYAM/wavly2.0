@@ -13,6 +13,8 @@ class VoiceController:
         self.thread = None
         self.wake_word = "wavly"
         self.activated = False
+        self.session_active = False
+        self.session_timeout = 999999
         self.voice_responder = voice_responder
 
     def start(self):
@@ -39,19 +41,14 @@ class VoiceController:
         except Exception as e:
             print(f"[VOICE] Ambient noise adjustment failed: {e}")
 
-        activation_time = 0
-
         while self.running:
             try:
-                # Calculate remaining time before activation timeout
+                # Wait if responder is currently speaking to prevent self-hearing
+                if self.voice_responder and getattr(self.voice_responder, 'is_speaking', False):
+                    time.sleep(0.1)
+                    continue
+
                 current_timeout = 3
-                if self.activated:
-                    elapsed = time.time() - activation_time
-                    if elapsed >= 8:
-                        self.activated = False
-                        print("[VOICE] Deactivated")
-                        continue
-                    current_timeout = min(3, max(1, int(8 - elapsed)))
 
                 with self.microphone as source:
                     audio = self.recognizer.listen(source, timeout=current_timeout, phrase_time_limit=3)
@@ -66,11 +63,7 @@ class VoiceController:
 
                 if not self.activated:
                     print(f'[VOICE] Standby heard: "{text}"')
-                    wake_words = [
-                        "wavly", "wavy", "wavely", "wably", "waverly", "waveely",
-                        "babli", "bably", "bobly", "bravely", "gravely", "webly", 
-                        "weebly", "lovely", "warmly", "warbly", "ravly", "robly", "radley"
-                    ]
+                    wake_words = ["wavly", "wavy", "wavely", "wably", "waverly", "waveely", "babli", "bably", "baby", "devli"]
                     if any(word in text for word in wake_words):
                         print("[VOICE] Wake word detected!")
                         if self.voice_responder:
@@ -81,25 +74,25 @@ class VoiceController:
                                 time.sleep(0.05)
                         
                         self.activated = True
-                        activation_time = time.time()
+                        self.session_active = True
                         print("[VOICE] Listening for command...")
                 else:
                     print(f'[VOICE] Heard: "{text}"')
+                    goodbye_words = ["goodbye", "goodbye wavly", "sleep", "deactivate", "shut down", "stop listening"]
+                    if any(word in text for word in goodbye_words):
+                        self.session_active = False
+                        self.activated = False
+                        print("[VOICE] Session ended")
+                        if self.voice_responder:
+                            self.voice_responder.speak("Goodbye sir. Wavly going to standby.")
+                        continue
+                    
                     self.command_queue.put(text)
-                    self.activated = False
 
             except sr.WaitTimeoutError:
-                if self.activated:
-                    elapsed = time.time() - activation_time
-                    if elapsed >= 8:
-                        self.activated = False
-                        print("[VOICE] Deactivated")
+                pass
             except sr.UnknownValueError:
-                if self.activated:
-                    elapsed = time.time() - activation_time
-                    if elapsed >= 8:
-                        self.activated = False
-                        print("[VOICE] Deactivated")
+                pass
             except sr.RequestError as e:
                 print(f"[VOICE] API Error: {e}")
             except Exception as e:

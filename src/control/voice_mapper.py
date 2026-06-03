@@ -13,8 +13,8 @@ class VoiceMapper:
             "screenshot": lambda: pyautogui.hotkey('win', 'shift', 's'),
             "volume up": lambda: pyautogui.press('volumeup'),
             "volume down": lambda: pyautogui.press('volumedown'),
-            "open chrome": lambda: os.startfile('chrome'),
-            "open notepad": lambda: os.startfile('notepad'),
+            "open chrome": lambda: os.system('start chrome'),
+            "open notepad": lambda: os.system('start notepad'),
             "switch tab": lambda: pyautogui.hotkey('ctrl', 'tab'),
             "close tab": lambda: pyautogui.hotkey('ctrl', 'w'),
             "zoom in": lambda: pyautogui.hotkey('ctrl', '='),
@@ -56,6 +56,9 @@ class VoiceMapper:
             
         # Clean punctuation which Google Speech Recognition often appends
         normalized = command.strip().lower().replace(".", "").replace(",", "").replace("!", "").strip()
+        
+        import time
+        time.sleep(0.3)
         
         # 1. First check for exact match
         matched_cmd = None
