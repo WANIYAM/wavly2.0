@@ -2,7 +2,6 @@ import queue
 import threading
 import time
 import speech_recognition as sr
-import pyttsx3
 
 class VoiceController:
     def __init__(self, voice_responder=None):

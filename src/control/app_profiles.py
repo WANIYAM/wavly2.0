@@ -1,5 +1,4 @@
 import pyautogui
-import time
 
 class AppProfiles:
     def __init__(self):
