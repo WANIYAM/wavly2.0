@@ -74,7 +74,7 @@ Wavly automatically detects the active foreground application and switches gestu
 - **`thumbs_down`** → Navigate backward (`Alt + Left Arrow`)
 - **`pinch`** → Zoom in (`Ctrl + =`)
 - **`fist`** → Zoom out (`Ctrl + -`)
-
+ 
 ### VLC Gestures
 - **`pinch`** → Play / Pause (`Spacebar`)
 - **`two_fingers`** → Fast forward seek (`Shift + Right Arrow`)

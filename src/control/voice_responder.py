@@ -69,26 +69,31 @@ class VoiceResponder:
             engine = pyttsx3.init()
             
             # Configure engine rate
-            engine.setProperty('rate', 170)
+            engine.setProperty('rate', 185)
             
             # Configure engine volume
             engine.setProperty('volume', 1.0)
             
-            # Configure voice: use the first English voice available
             voices = engine.getProperty('voices')
-            english_voice = None
+            female_voice = None
+
+            # Try to find a female English voice
+            female_keywords = ['zira', 'female', 'woman', 'girl', 'hazel', 'susan', 'catherine']
             for voice in voices:
-                languages = getattr(voice, 'languages', [])
-                languages_str = "".join([str(l) for l in languages]).lower()
-                name_str = str(voice.name).lower() if voice.name else ""
-                id_str = str(voice.id).lower() if voice.id else ""
-                
-                if 'en' in languages_str or 'english' in name_str or 'en' in id_str or 'us' in name_str or 'gb' in name_str:
-                    english_voice = voice
+                name_str = str(voice.name).lower()
+                id_str = str(voice.id).lower()
+                for keyword in female_keywords:
+                    if keyword in name_str or keyword in id_str:
+                        female_voice = voice
+                        break
+                if female_voice:
                     break
-            
-            if english_voice:
-                engine.setProperty('voice', english_voice.id)
+
+            # Fallback to second voice if no female found
+            if female_voice:
+                engine.setProperty('voice', female_voice.id)
+            elif len(voices) > 1:
+                engine.setProperty('voice', voices[1].id)
             elif voices:
                 engine.setProperty('voice', voices[0].id)
                 

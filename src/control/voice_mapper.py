@@ -57,9 +57,6 @@ class VoiceMapper:
         # Clean punctuation which Google Speech Recognition often appends
         normalized = command.strip().lower().replace(".", "").replace(",", "").replace("!", "").strip()
         
-        import time
-        time.sleep(0.3)
-        
         # 1. First check for exact match
         matched_cmd = None
         if normalized in self.commands:

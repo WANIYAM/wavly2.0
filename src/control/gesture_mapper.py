@@ -44,15 +44,6 @@ class GestureMapper:
         return False
 
     def execute(self, gesture_name):
-        # Check active app every 2 seconds
-        now = time.time()
-        if now - self.last_app_check >= self.app_check_interval:
-            new_app = self.context_detector.get_active_app()
-            if new_app != self.current_app:
-                self.current_app = new_app
-                print(f"[CONTEXT] App changed → {self.current_app}")
-            self.last_app_check = now
-
         if gesture_name == "unknown" or gesture_name is None:
             self.two_fingers_start = None
             self.last_confirmed_gesture = None

@@ -55,6 +55,7 @@ class VisionThread(QThread):
         # Stop both voice controller and responder gracefully
         self.voice_controller.stop()
         self.voice_responder.stop()
+        cv2.destroyAllWindows()
 
     def run(self):
         cap = cv2.VideoCapture(0)
@@ -219,6 +220,11 @@ class VisionThread(QThread):
                 self.gesture_detected.emit(display_gesture)
             else:
                 self.gesture_detected.emit("No Hand")
+
+            # Show small PIP camera window
+            small_frame = cv2.resize(frame, (320, 240))
+            cv2.imshow("Wavly Camera", small_frame)
+            cv2.waitKey(1)
 
             # Process voice commands
             queue_size = self.voice_controller.command_queue.qsize()
