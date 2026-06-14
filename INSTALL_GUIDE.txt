@@ -1,0 +1,42 @@
+WAVLY 2.0 — Installation Guide
+================================
+
+WHAT YOU NEED:
+  - Windows 10 or Windows 11
+  - A webcam (built-in or USB)
+  - A microphone (built-in or USB)  
+  - Internet connection
+
+STEP 1 — Install Python
+  - Double-click install.bat
+  - If Python is not installed, it will open the download page for you
+  - Download and install Python 3.12
+  - IMPORTANT: On the first install screen, check the box that says
+    "Add Python to PATH" before clicking Install
+  - After Python is installed, run install.bat again
+
+STEP 2 — Run the installer
+  - Double-click install.bat
+  - Wait for it to finish (may take 2-5 minutes)
+  - You will see "Setup complete!" when done
+
+STEP 3 — Launch Wavly
+  - Find "Wavly 2.0" shortcut on your Desktop
+  - Double-click it to launch
+  - Allow webcam and microphone access if asked
+
+HOW TO USE:
+  - Show your hand to the webcam to control the cursor
+  - Say "Wavly" to activate voice commands
+  - Say "goodbye" to deactivate voice commands
+  - Press ESC to close the app
+
+NEED INTERNET?
+  - Yes, voice commands require an internet connection
+  - Hand gestures work offline
+
+HAVING PROBLEMS?
+  - Make sure your webcam is connected before launching
+  - Make sure your microphone is connected before launching
+  - Re-run install.bat if something breaks
+  - Make sure "Add Python to PATH" was checked during Python install

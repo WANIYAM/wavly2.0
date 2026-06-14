@@ -51,8 +51,6 @@ class MouseController:
         if self.prev_x is not None and self.prev_y is not None:
             dist = math.sqrt((smoothed_x - self.prev_x) ** 2 + (smoothed_y - self.prev_y) ** 2)
             if dist <= 3:
-                self.prev_x = None
-                self.prev_y = None
                 return
 
         self.prev_x = smoothed_x
