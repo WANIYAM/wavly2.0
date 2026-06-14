@@ -4,7 +4,7 @@ import math
 from datetime import datetime
 from PyQt6.QtWidgets import QMainWindow, QApplication
 from PyQt6.QtCore import Qt, QPoint, QTimer, QStandardPaths, QRectF
-from PyQt6.QtGui import QPainter, QPen, QColor, QPixmap, QFont
+from PyQt6.QtGui import QPainter, QPen, QColor, QPixmap, QFont, QImage
 
 from src.ui.vision_thread import VisionThread
 
@@ -68,6 +68,10 @@ class OverlayWindow(QMainWindow):
         self.hud_fade_timer.start(3000)
 
         self.voice_status = "STANDBY"
+        self.camera_frame = None
+        self.pip_width = 280
+        self.pip_height = 210
+        self.pip_margin = 30
 
         # Animation properties for the Arc Reactor HUD
         self.pulse_angle = 0.0      # Rotation angle for segments
@@ -86,6 +90,7 @@ class OverlayWindow(QMainWindow):
         self.vision_thread.mode_changed.connect(self.update_system_mode)
         self.vision_thread.app_changed.connect(self.update_app_hud)
         self.vision_thread.voice_status_changed.connect(self.update_voice_status)
+        self.vision_thread.frame_ready.connect(self.update_camera_frame)
 
         self.vision_thread.start()
 
@@ -110,6 +115,45 @@ class OverlayWindow(QMainWindow):
         self.hud_opacity = 1.0
         self.hud_fade_timer.start(3000)
         self.update()
+
+    def update_camera_frame(self, frame):
+        import cv2
+        rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        h, w, ch = rgb.shape
+        bytes_per_line = ch * w
+        self.camera_frame = QImage(rgb.data, w, h, bytes_per_line, QImage.Format.Format_RGB888).copy()
+        self.update()
+
+    def draw_pip(self, painter):
+        if self.camera_frame is None:
+            return
+
+        # Position: bottom-left corner
+        pip_x = self.pip_margin
+        pip_y = self.screen_height - self.pip_height - self.pip_margin
+
+        # Draw dark background behind pip
+        painter.setBrush(QColor(0, 0, 0, 180))
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.drawRoundedRect(pip_x - 3, pip_y - 3, self.pip_width + 6, self.pip_height + 6, 8.0, 8.0)
+
+        # Draw electric blue border
+        painter.setPen(QPen(QColor(0, 150, 255, 200), 1.5))
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.drawRoundedRect(pip_x - 3, pip_y - 3, self.pip_width + 6, self.pip_height + 6, 8.0, 8.0)
+
+        # Scale and draw camera frame
+        scaled = self.camera_frame.scaled(
+            self.pip_width, self.pip_height,
+            Qt.AspectRatioMode.KeepAspectRatio,
+            Qt.TransformationMode.SmoothTransformation
+        )
+        painter.drawImage(pip_x, pip_y, scaled)
+
+        # Draw "CAM" label in top-left corner of pip
+        painter.setFont(QFont("Segoe UI", 8, QFont.Weight.Bold))
+        painter.setPen(QColor(0, 200, 255))
+        painter.drawText(pip_x + 6, pip_y + 14, "CAM")
 
     def update_animation(self):
         if self.voice_status == "ACTIVE":
@@ -217,6 +261,7 @@ class OverlayWindow(QMainWindow):
 
         # Draw the canvas buffer on screen
         painter.drawPixmap(0, 0, self.canvas)
+        self.draw_pip(painter)
 
         # Draw HUD with opacity control
         painter.setOpacity(self.hud_opacity)

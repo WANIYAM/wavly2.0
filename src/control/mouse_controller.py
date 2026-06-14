@@ -1,9 +1,10 @@
+import math
 import pyautogui
 import time
 
 
 class MouseController:
-    def __init__(self, smoothing_factor=0.3):
+    def __init__(self, smoothing_factor=0.7):
         pyautogui.FAILSAFE = False
         self.screen_width, self.screen_height = pyautogui.size()
         pyautogui.PAUSE = 0.01
@@ -38,18 +39,21 @@ class MouseController:
             smoothed_x = screen_x
             smoothed_y = screen_y
         else:
-            alpha = 1 - self.smoothing_factor
+            alpha = (1 - self.smoothing_factor) * speed_multiplier
             smoothed_x = int(self.prev_x * self.smoothing_factor + screen_x * alpha)
             smoothed_y = int(self.prev_y * self.smoothing_factor + screen_y * alpha)
-
-            # Apply speed multiplier
-            if speed_multiplier != 1.0:
-                smoothed_x = int(self.prev_x + (smoothed_x - self.prev_x) * speed_multiplier)
-                smoothed_y = int(self.prev_y + (smoothed_y - self.prev_y) * speed_multiplier)
 
         # Clamp again after smoothing
         smoothed_x = max(0, min(smoothed_x, self.screen_width - 1))
         smoothed_y = max(0, min(smoothed_y, self.screen_height - 1))
+
+        # Dead zone filter to ignore micro-jitter and reset stale EWMA
+        if self.prev_x is not None and self.prev_y is not None:
+            dist = math.sqrt((smoothed_x - self.prev_x) ** 2 + (smoothed_y - self.prev_y) ** 2)
+            if dist <= 3:
+                self.prev_x = None
+                self.prev_y = None
+                return
 
         self.prev_x = smoothed_x
         self.prev_y = smoothed_y

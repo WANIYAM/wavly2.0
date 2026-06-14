@@ -23,6 +23,7 @@ class VisionThread(QThread):
     mode_changed = pyqtSignal(str)
     app_changed = pyqtSignal(str)
     voice_status_changed = pyqtSignal(str)
+    frame_ready = pyqtSignal(object)
 
     def __init__(self):
         super().__init__()
@@ -55,7 +56,6 @@ class VisionThread(QThread):
         # Stop both voice controller and responder gracefully
         self.voice_controller.stop()
         self.voice_responder.stop()
-        cv2.destroyAllWindows()
 
     def run(self):
         cap = cv2.VideoCapture(0)
@@ -215,16 +215,16 @@ class VisionThread(QThread):
                 if should_move:
                     self.mouse_controller.move(index_fingertip[0], index_fingertip[1],
                                               frame_width, frame_height, speed_multiplier)
+                else:
+                    self.mouse_controller.prev_x = None
+                    self.mouse_controller.prev_y = None
 
-                 # Emit gesture detected
+                # Emit gesture detected
                 self.gesture_detected.emit(display_gesture)
             else:
                 self.gesture_detected.emit("No Hand")
 
-            # Show small PIP camera window
-            small_frame = cv2.resize(frame, (320, 240))
-            cv2.imshow("Wavly Camera", small_frame)
-            cv2.waitKey(1)
+            self.frame_ready.emit(frame.copy())
 
             # Process voice commands
             queue_size = self.voice_controller.command_queue.qsize()
