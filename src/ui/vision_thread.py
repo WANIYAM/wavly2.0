@@ -48,6 +48,9 @@ class VisionThread(QThread):
         self.last_logged_gesture = None
         self.pinch_active = False
         self.last_voice_status = "STANDBY"
+        # Tracks whether the cursor was moving last frame, so we clutch (reseed)
+        # only on the moving -> not-moving transition rather than every frame.
+        self.prev_should_move = False
 
     def stop(self):
         if not self.running:
@@ -58,7 +61,7 @@ class VisionThread(QThread):
         self.voice_responder.stop()
 
     def run(self):
-        cap = cv2.VideoCapture(0)
+        cap = cv2.VideoCapture(1)
 
         if not cap.isOpened():
             print("Error: Could not open webcam")
@@ -215,13 +218,21 @@ class VisionThread(QThread):
                 if should_move:
                     self.mouse_controller.move(index_fingertip[0], index_fingertip[1],
                                               frame_width, frame_height, speed_multiplier)
-                else:
-                    self.mouse_controller.prev_x = None
-                    self.mouse_controller.prev_y = None
+                elif self.prev_should_move:
+                    # Just stopped moving (fist / gesture change / stabilizing):
+                    # clutch once so the next move re-anchors without snapping
+                    # the cursor.
+                    self.mouse_controller.reseed()
+                self.prev_should_move = should_move
 
                 # Emit gesture detected
                 self.gesture_detected.emit(display_gesture)
             else:
+                # Hand lost: clutch (once) so re-acquisition resumes from the
+                # cursor's current position instead of jumping.
+                if self.prev_should_move:
+                    self.mouse_controller.reseed()
+                self.prev_should_move = False
                 self.gesture_detected.emit("No Hand")
 
             self.frame_ready.emit(frame.copy())
