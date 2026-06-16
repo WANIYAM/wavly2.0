@@ -102,7 +102,7 @@ src/
 
 ### Adding New Gestures
 
-1. Open a terminal and run `python record_gestures.py` to capture live normalized landmark coordinates. Assign numeric keys to labels. This appends data directly to `data/gestures.csv`.
+1. Open a terminal and run `python record_gestures.py` to capture live normalized landmark coordinates. Numeric keys `0-9` are bound to a fixed set of gesture labels (`fist`, `open_hand`, `point`, `two_fingers`, `three_fingers`, `four_fingers`, `thumbs_up`, `thumbs_down`, `l_shape`, `pinch`) via the `GESTURE_LABELS` dict — edit that dict to add new labels. Press `R` to toggle recording, `Q` to quit. This appends data directly to `data/gestures.csv`.
 2. Run `python src/ai/trainer.py` to re-train the Random Forest model and write `data/gesture_model.pkl` to disk.
 3. Map the confirmed gesture to system actions in `src/control/gesture_mapper.py` (and add app-specific mappings in `src/control/app_profiles.py` if needed).
 4. Launch `python main.py` to verify system behavior.
@@ -111,6 +111,11 @@ src/
 
 - PyAutoGUI has a built-in failsafe (slam mouse pointer into any screen corner to immediately abort).
 - Test keyboard and click automations in a safe test environment first.
+
+### Gotchas
+
+- **Camera index is hardcoded and inconsistent.** The main app (`src/ui/vision_thread.py`) and `test_gestures.py` use `cv2.VideoCapture(0)`, but `record_gestures.py` uses `cv2.VideoCapture(1)`. If recording fails to open the webcam or grabs the wrong camera, change the index to match your hardware.
+- **Windows-only runtime.** `main.py` calls `ctypes.windll.user32.SetProcessDPIAware()` and `context_detector.py`/voice modules rely on `pywin32`/`PyGetWindow`, so the app targets Windows despite the cross-platform venv instructions.
 
 ## Data & Models
 
