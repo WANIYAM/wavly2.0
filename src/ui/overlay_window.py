@@ -344,9 +344,9 @@ class OverlayWindow(QMainWindow):
         painter.setFont(QFont("Segoe UI", 9))
         painter.setPen(QColor(120, 130, 150))
         if self.system_mode == "DRAWING":
-            hint_text = "Hint: Pinch to exit drawing"
+            hint_text = "Hint: Pinch or Spider-Man to exit drawing"
         else:
-            hint_text = "Hint: Hold 2-fingers to draw"
+            hint_text = "Hint: Spider-Man gesture to draw"
         painter.drawText(int(content_x), int(hud_y + hud_height - 12), hint_text)
 
         # Draw the holographic Arc Reactor on the right side of the HUD

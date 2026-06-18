@@ -4,9 +4,10 @@ from src.control.context_detector import ContextDetector
 from src.control.app_profiles import AppProfiles
 
 class GestureMapper:
-    def __init__(self):
+    def __init__(self, voice_responder=None):
         self.current_mode = "normal"
         self.drawing_mode = False
+        self.voice_responder = voice_responder
         self.two_fingers_start = None
         self.last_confirmed_gesture = None
         self.last_gesture_times = {}
@@ -21,6 +22,7 @@ class GestureMapper:
             "thumbs_down": 2.0,
             "l_shape": 2.0,
             "pinch": 2.0,
+            "spider_man": 2.0,
         }
         self.context_detector = ContextDetector()
         self.app_profiles = AppProfiles()
@@ -50,22 +52,9 @@ class GestureMapper:
             self.prev_two_fingers_y = None
             return None
 
-        # two_fingers hold for drawing mode (before cooldown and before deduplication)
-        two_fingers_mode_trigger = False
-        if self.current_app == "default" and not self.drawing_mode and gesture_name == "two_fingers":
-            if self.two_fingers_start is None:
-                self.two_fingers_start = time.time()
-            elif time.time() - self.two_fingers_start >= 2.0:
-                self.drawing_mode = True
-                self.two_fingers_start = None
-                print("[MODE] Normal → Drawing")
-                two_fingers_mode_trigger = True
-        else:
-            self.two_fingers_start = None
-
-        if two_fingers_mode_trigger:
-            self.last_confirmed_gesture = "drawing"
-            return "drawing"
+        # Action mappings:
+        # two_fingers -> Scroll up/down only (no drawing mode)
+        # spider_man -> Toggle Drawing Mode
 
         # Continuous gestures that bypass deduplication completely
         continuous_gestures = ["two_fingers", "thumbs_up", "thumbs_down"]
@@ -83,9 +72,11 @@ class GestureMapper:
 
         # DRAWING MODE
         if self.drawing_mode:
-            if gesture_name == "pinch":
+            if gesture_name in ["pinch", "spider_man"]:
                 self.drawing_mode = False
                 print("[MODE] Drawing → Normal")
+                if self.voice_responder:
+                    self.voice_responder.speak("Drawing mode off")
                 return "normal"
             drawing_actions = {
                 "fist": "clear_canvas",
@@ -118,7 +109,13 @@ class GestureMapper:
                     return "executed"
 
             # Default mode gestures
-            if gesture_name == "fist":
+            if gesture_name == "spider_man":
+                self.drawing_mode = True
+                print("[MODE] Normal → Drawing")
+                if self.voice_responder:
+                    self.voice_responder.speak("Drawing mode on")
+                return "drawing"
+            elif gesture_name == "fist":
                 print("[GESTURE] fist → freeze")
                 self.current_mode = "freeze"
                 return "freeze"
