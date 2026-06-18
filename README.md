@@ -61,6 +61,20 @@ Speak clearly to execute any of the following 20 voice commands:
 - **`start presentation`** → PowerPoint slide show start (`F5`)
 - **`stop presentation`** → PowerPoint exit slide show (`Escape`)
 
+### Natural Language & Aliases
+
+Wavly supports fuzzy keyword matching and synonyms. You don't have to say the exact phrase—as long as your sentence contains the keyword, it will execute the command. Some examples:
+
+- **"chrome"** or **"browser"** → Maps to `open chrome`
+- **"notepad"** or **"editor"** → Maps to `open notepad`
+- **"new"**, **"close"**, **"switch"** → Maps to tab controls
+- **"next"**, **"previous"** → Maps to slide controls
+- **"forward"**, **"back"** → Maps to navigation
+- **"louder"**, **"quieter"** → Maps to volume controls
+- **"snap"** or **"print screen"** → Maps to `screenshot`
+
+*Example: Saying "Wavly, pull up the browser please" will successfully detect "browser" and open Chrome.*
+
 ---
 
 ## Context-Aware Application Profiles
