@@ -12,26 +12,27 @@ Wavly is an intelligent, touchless user interface system that translates real-ti
 - **✅ Phase 2 — Mouse Control**: Cursor movement tracking, coordinate smoothing (exponential weighted moving average), and click handling.
 - **✅ Phase 3 — Gesture Recognition (99.66% accuracy)**: Custom gesture classifier utilizing a RandomForest classifier model trained on a 10-gesture dataset.
 - **✅ Phase 5 — Context Awareness**: Dynamic detection of foreground active windows and context-sensitive application profiles.
-- **✅ Phase 6 — UI Overlay**: Transparent overlay drawing canvas (Drawing Mode) with custom painter tools (brush size, colors, erase, undo/redo).
+- **✅ Phase 6 — UI Overlay**: Transparent overlay drawing canvas (Drawing Mode toggled by spider_man gesture) with custom painter tools (brush size, colors, erase, undo/redo).
 - **✅ Phase 8 — Presentation Mode**: Custom PowerPoint presentation control actions with transition delays.
 - **✅ Phase 9 — Voice Integration**: Threaded background speech command listener utilizing Google Web Speech API and PyAudio to trigger system automation.
 
 ---
 
-## All 10 Gestures & Default Actions
+## All 11 Gestures & Default Actions
 
-Wavly recognizes **10 distinct hand gestures**. In the **Default System Profile (Normal Mode)**, these gestures control mouse movement, clicking, scrolling, and system utilities:
+Wavly recognizes **11 distinct hand gestures**. In the **Default System Profile (Normal Mode)**, these gestures control mouse movement, clicking, scrolling, and system utilities:
 
 1. **`open_hand`** (Label 1) → Normal Cursor Mode (Default pointer tracking)
 2. **`point`** (Label 2) → Precise Cursor Mode (Slower, fine-grain mouse control)
 3. **`fist`** (Label 0) → Freeze Cursor (Stops all mouse movement)
-4. **`two_fingers`** (Label 3) → Scroll Mode (Triggers vertical scroll based on hand movement / Hold for 2 seconds to enter **Drawing Mode**)
+4. **`two_fingers`** (Label 3) → Scroll Mode (Triggers vertical scroll based on hand movement)
 5. **`pinch`** (Label 9) → Left Mouse Click (Exits **Drawing Mode** if active)
 6. **`l_shape`** (Label 8) → Right Mouse Click
 7. **`three_fingers`** (Label 4) → Open On-Screen Keyboard (`Win + Ctrl + O`)
 8. **`four_fingers`** (Label 5) → Take Screenshot (`Win + Shift + S`)
 9. **`thumbs_up`** (Label 6) → Volume Up
 10. **`thumbs_down`** (Label 7) → Volume Down
+11. **`spider_man`** (Label 10) → Toggle Drawing Mode ON/OFF (Geometric detection: thumb, index, pinky extended; middle and ring curled)
 
 ---
 
@@ -59,6 +60,20 @@ Speak clearly to execute any of the following 20 voice commands:
 - **`previous slide`** → PowerPoint previous slide (`Left Arrow`)
 - **`start presentation`** → PowerPoint slide show start (`F5`)
 - **`stop presentation`** → PowerPoint exit slide show (`Escape`)
+
+### Natural Language & Aliases
+
+Wavly supports fuzzy keyword matching and synonyms. You don't have to say the exact phrase—as long as your sentence contains the keyword, it will execute the command. Some examples:
+
+- **"chrome"** or **"browser"** → Maps to `open chrome`
+- **"notepad"** or **"editor"** → Maps to `open notepad`
+- **"new"**, **"close"**, **"switch"** → Maps to tab controls
+- **"next"**, **"previous"** → Maps to slide controls
+- **"forward"**, **"back"** → Maps to navigation
+- **"louder"**, **"quieter"** → Maps to volume controls
+- **"snap"** or **"print screen"** → Maps to `screenshot`
+
+*Example: Saying "Wavly, pull up the browser please" will successfully detect "browser" and open Chrome.*
 
 ---
 

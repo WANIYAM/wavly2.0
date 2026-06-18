@@ -157,17 +157,19 @@ Recognized gesture labels:
 - `thumbs_down`
 - `l_shape`
 - `pinch`
+- `spider_man`
 
 Gesture behavior includes:
 - `open_hand` → normal cursor movement mode
 - `point` → precision cursor movement mode
 - `fist` → freeze cursor
-- `two_fingers` → scroll or enter drawing mode when held for 2 seconds
+- `two_fingers` → scroll
 - `pinch` → left click or exit drawing mode
 - `l_shape` → right click
 - `thumbs_up` / `thumbs_down` → volume control
 - `three_fingers` → launch on-screen keyboard
 - `four_fingers` → screenshot
+- `spider_man` → toggle drawing mode ON/OFF
 
 ---
 

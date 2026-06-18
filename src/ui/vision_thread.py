@@ -34,10 +34,10 @@ class VisionThread(QThread):
             tracking_confidence=0.7
         )
         self.mouse_controller = MouseController()
-        self.gesture_mapper = GestureMapper()
-        self.gesture_predictor = GesturePredictor()
         self.voice_responder = VoiceResponder()
         self.voice_responder.start()
+        self.gesture_mapper = GestureMapper(voice_responder=self.voice_responder)
+        self.gesture_predictor = GesturePredictor()
         self.voice_controller = VoiceController(voice_responder=self.voice_responder)
         self.voice_mapper = VoiceMapper(voice_responder=self.voice_responder)
 
@@ -61,7 +61,7 @@ class VisionThread(QThread):
         self.voice_responder.stop()
 
     def run(self):
-        cap = cv2.VideoCapture(1)
+        cap = cv2.VideoCapture(0)
 
         if not cap.isOpened():
             print("Error: Could not open webcam")
@@ -128,9 +128,31 @@ class VisionThread(QThread):
 
                 # Predict gesture using ML model (use normalized landmarks)
                 raw_landmarks = [(lm.x, lm.y) for lm in landmarks.landmark]
-                wrist_x, wrist_y = raw_landmarks[0]
-                normalized_landmarks = [(x - wrist_x, y - wrist_y) for x, y in raw_landmarks]
+                wrist_x_norm, wrist_y_norm = raw_landmarks[0]
+                normalized_landmarks = [(x - wrist_x_norm, y - wrist_y_norm) for x, y in raw_landmarks]
                 predicted_gesture = self.gesture_predictor.predict(normalized_landmarks)
+
+                # Geometric Spider-Man check
+                wrist_pos = landmark_list[0]
+                thumb_tip = landmark_list[4]
+                thumb_mcp = landmark_list[2]
+                # index_fingertip is already landmark_list[8]
+                # index_pip is already landmark_list[6]
+                middle_fingertip = landmark_list[12]
+                middle_pip = landmark_list[10]
+                ring_fingertip = landmark_list[16]
+                ring_pip = landmark_list[14]
+                pinky_fingertip = landmark_list[20]
+                pinky_pip = landmark_list[18]
+
+                is_thumb_extended = abs(thumb_tip[0] - wrist_pos[0]) > abs(thumb_mcp[0] - wrist_pos[0])
+                is_index_extended = index_fingertip[1] < index_pip[1] - 15
+                is_middle_curled = middle_fingertip[1] > middle_pip[1] - 10
+                is_ring_curled = ring_fingertip[1] > ring_pip[1] - 10
+                is_pinky_extended = pinky_fingertip[1] < pinky_pip[1] - 15
+
+                if is_thumb_extended and is_index_extended and is_middle_curled and is_ring_curled and is_pinky_extended:
+                    predicted_gesture = "spider_man"
 
                 # Add prediction to buffer
                 self.gesture_buffer.append(predicted_gesture)

@@ -1,6 +1,6 @@
 # WAVLY 2.0 — Comprehensive Project Report
 
-> **Generated**: June 6, 2026  
+> **Generated**: June 18, 2026  
 > **Project Health Score**: 9.0 / 10  
 > **ML Model Accuracy**: 99.66%  
 > **Status**: Active Development
@@ -118,6 +118,7 @@ All dependencies are pinned in `requirements.txt` for reproducible builds.
 - Implemented gesture-triggered shape tools (lines, circles, rectangles).
 - Added vocal stroke commands for hands-free drawing instructions.
 - Supported multi-stroke undo with per-stroke granularity.
+- **Entry Mechanism**: Toggled instantly by the `spider_man` gesture.
 
 ---
 
@@ -221,20 +222,21 @@ All dependencies are pinned in `requirements.txt` for reproducible builds.
 
 ## 4. Gesture System
 
-### All 10 Gestures and Their Default Actions
+### All 11 Gestures and Their Default Actions
 
 | # | Gesture          | Label | Normal Mode Action                               | Drawing Mode Action     |
 |---|:-----------------|:-----:|:-------------------------------------------------|:------------------------|
 | 1 | `fist`           | 0     | Freeze cursor (stop movement)                    | Clear canvas            |
 | 2 | `open_hand`      | 1     | Normal cursor tracking (1.0× speed)              | Pen up (stop drawing)   |
 | 3 | `point`          | 2     | Precision cursor tracking (0.5× speed)           | Pen down (start drawing)|
-| 4 | `two_fingers`    | 3     | Scroll up/down (based on hand Y) / Hold 2s → Drawing Mode | Change brush color |
+| 4 | `two_fingers`    | 3     | Scroll up/down (based on hand Y)                 | Change brush color      |
 | 5 | `three_fingers`  | 4     | Open on-screen keyboard (`Win+Ctrl+O`)           | Increase brush size     |
 | 6 | `four_fingers`   | 5     | Take screenshot (`Win+Shift+S`)                  | Save drawing to PNG     |
 | 7 | `thumbs_up`      | 6     | Volume up                                        | Undo                    |
 | 8 | `thumbs_down`    | 7     | Volume down                                      | Redo                    |
 | 9 | `l_shape`        | 8     | Right-click                                      | Toggle eraser mode      |
 | 10| `pinch`          | 9     | Left-click                                       | Exit Drawing → Normal   |
+| 11| `spider_man`     | 10    | Toggle Drawing Mode ON                           | Toggle Drawing Mode OFF |
 
 ### ML Model Details
 
@@ -244,6 +246,7 @@ All dependencies are pinned in `requirements.txt` for reproducible builds.
 - **Input Features**: 42 floats (21 landmarks × 2 coordinates each)
 - **Model File**: `data/gesture_model.pkl` (serialized via pickle, ~4.2 MB)
 - **Training Data**: `data/gestures.csv` (~13.7 MB)
+- **Note**: The ML model classifies 10 base gestures. The 11th gesture (`spider_man`) is detected geometrically via MediaPipe landmarks before the ML prediction step, acting as a direct injection into the buffer.
 
 ### Coordinate Normalization
 
@@ -293,6 +296,7 @@ Each gesture has a cooldown period to prevent repeated accidental triggers:
 | `thumbs_down`  | 2.0s     |
 | `l_shape`      | 2.0s     |
 | `pinch`        | 2.0s     |
+| `spider_man`   | 2.0s     |
 
 > **Note**: In PowerPoint context, `two_fingers` and `l_shape` cooldowns are reduced to `0.8s` for faster slide navigation.
 
@@ -366,6 +370,7 @@ The `VoiceResponder` provides spoken feedback using a multi-engine TTS pipeline 
 | **Startup Greeting** | *"Wavly systems online. All systems fully operational. How can I assist you, sir?"* |
 | **Wake Response**    | *"At your service, sir."* / *"Yes, sir?"* / *"Online and listening, sir."* |
 | **Command Success**  | *"Done"* / *"Opening Chrome for you"* / *"Scrolling up"*                  |
+| **Mode Switch**      | *"Drawing mode on"* / *"Drawing mode off"* (Announced in real-time)       |
 | **Command Failure**  | *"I'm sorry sir, I couldn't find a mapping for that command."*            |
 | **Session End**      | *"Goodbye sir. Wavly going to standby."*                                  |
 
@@ -657,7 +662,6 @@ wavly2.0/
 - **No shape tools** — Only freehand drawing is available. No line, circle, or rectangle tools exist yet.
 - **Brush size cycles only upward** — Size wraps from 20 back to 2; there is no decrease gesture.
 - **Canvas is not interactive** — The `WindowTransparentForInput` flag means users cannot interact with drawn content via mouse.
-- **Drawing mode entry** — Requires holding `two_fingers` for 2 full seconds, which some users find unintuitive.
 
 ---
 

@@ -31,6 +31,13 @@ class VoiceResponder:
             print(f'[RESPONDER] Queueing speech: "{text}"')
             self.speech_queue.put(text)
 
+    def system_speak(self, text):
+        if not self.running:
+            self.start()
+        if text:
+            print(f'[VoiceResponder] system_speak: "{text}"')
+            self.speech_queue.put(text)
+
     def greet(self):
         import random
         greetings = [
@@ -64,17 +71,11 @@ class VoiceResponder:
         except Exception:
             pass
 
-        engine = None
+        target_voice_id = None
+        engine_available = False
         try:
-            engine = pyttsx3.init()
-            
-            # Configure engine rate
-            engine.setProperty('rate', 185)
-            
-            # Configure engine volume
-            engine.setProperty('volume', 1.0)
-            
-            voices = engine.getProperty('voices')
+            temp_engine = pyttsx3.init()
+            voices = temp_engine.getProperty('voices')
             female_voice = None
 
             # Try to find a female English voice
@@ -91,14 +92,16 @@ class VoiceResponder:
 
             # Fallback to second voice if no female found
             if female_voice:
-                engine.setProperty('voice', female_voice.id)
+                target_voice_id = female_voice.id
             elif len(voices) > 1:
-                engine.setProperty('voice', voices[1].id)
+                target_voice_id = voices[1].id
             elif voices:
-                engine.setProperty('voice', voices[0].id)
+                target_voice_id = voices[0].id
                 
+            del temp_engine
+            engine_available = True
         except Exception as e:
-            print(f"[RESPONDER] Failed to initialize pyttsx3: {e}")
+            print(f"[RESPONDER] Failed to query pyttsx3 voices: {e}")
 
         while self.running:
             try:
@@ -114,25 +117,23 @@ class VoiceResponder:
                 
                 # Try speaking using pyttsx3
                 spoken = False
-                if engine:
+                if engine_available:
                     try:
                         print(f"[RESPONDER] About to speak: {text}")
+                        # Workaround for pyttsx3 thread bug: re-initialize engine per utterance
+                        engine = pyttsx3.init()
+                        engine.setProperty('rate', 185)
+                        engine.setProperty('volume', 1.0)
+                        if target_voice_id:
+                            engine.setProperty('voice', target_voice_id)
+
                         engine.say(text)
                         engine.runAndWait()
+                        del engine
                         print(f"[RESPONDER] Finished speaking: {text}")
                         spoken = True
                     except Exception as e:
                         print(f"[RESPONDER] Speech failed: {e}")
-                        try:
-                            engine.stop()
-                            engine = pyttsx3.init()
-                            engine.setProperty('rate', 175)
-                            engine.setProperty('volume', 1.0)
-                            engine.say(text)
-                            engine.runAndWait()
-                            spoken = True
-                        except Exception as e2:
-                            print(f"[RESPONDER] Retry failed: {e2}")
                 
                 # Fallback to PowerShell SpeechSynthesizer if pyttsx3 is not available or failed
                 if not spoken:
