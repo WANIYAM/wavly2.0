@@ -231,7 +231,7 @@ All dependencies are pinned in `requirements.txt` for reproducible builds.
 | 3 | `point`          | 2     | Precision cursor tracking (0.5× speed)           | Pen down (start drawing)|
 | 4 | `two_fingers`    | 3     | Scroll up/down (based on hand Y)                 | Change brush color      |
 | 5 | `three_fingers`  | 4     | Open on-screen keyboard (`Win+Ctrl+O`)           | Increase brush size     |
-| 6 | `four_fingers`   | 5     | Take screenshot (`Win+Shift+S`)                  | Save drawing to PNG     |
+| 6 | `four_fingers`   | 5     | Screenshot to clipboard (direct grab + toast)    | Save drawing to PNG     |
 | 7 | `thumbs_up`      | 6     | Volume up                                        | Undo                    |
 | 8 | `thumbs_down`    | 7     | Volume down                                      | Redo                    |
 | 9 | `l_shape`        | 8     | Right-click                                      | Toggle eraser mode      |

@@ -59,6 +59,13 @@ class OverlayWindow(QMainWindow):
         self.active_app_name = "default"
         self.hud_opacity = 1.0
 
+        # Toast notification state (transient messages, e.g. screenshot confirmation)
+        self.toast_message = ""
+        self.toast_opacity = 0.0
+        self.toast_start = 0.0
+        self.toast_duration = 2.0   # seconds fully visible before fading
+        self.toast_fade = 0.6       # seconds to fade out
+
 
 
         # HUD auto-fade timer
@@ -169,6 +176,15 @@ class OverlayWindow(QMainWindow):
             pulse_speed = 0.02
             
         self.pulse_val = abs(math.sin(time.time() * pulse_speed * 10))
+
+        # Fade out the toast notification after its visible duration
+        if self.toast_message:
+            elapsed = time.time() - self.toast_start
+            if elapsed > self.toast_duration:
+                self.toast_opacity = max(0.0, 1.0 - (elapsed - self.toast_duration) / self.toast_fade)
+                if self.toast_opacity <= 0.0:
+                    self.toast_message = ""
+
         self.update()
 
     def update_system_mode(self, mode):
@@ -219,6 +235,73 @@ class OverlayWindow(QMainWindow):
         elif command == "erase_mode":
             self.erase_mode = not self.erase_mode
             self.update()
+        elif command == "screenshot":
+            self.take_screenshot()
+
+    def show_toast(self, message):
+        """Show a small transient notification near the top-center of the screen."""
+        self.toast_message = message
+        self.toast_opacity = 1.0
+        self.toast_start = time.time()
+        self.update()
+
+    def take_screenshot(self):
+        """Capture the whole screen straight to the clipboard (no Snipping Tool).
+
+        The overlay is hidden first so the HUD, camera preview and drawing canvas
+        are excluded from the capture, then restored once the grab completes.
+        """
+        self.hide()
+        # Give the compositor a moment to remove the overlay before grabbing.
+        QTimer.singleShot(200, self._capture_to_clipboard)
+
+    def _capture_to_clipboard(self):
+        try:
+            pixmap = QApplication.primaryScreen().grabWindow(0)
+            QApplication.clipboard().setPixmap(pixmap)
+            print("[SCREENSHOT] Captured to clipboard")
+            message = "Screenshot saved to clipboard"
+        except Exception as e:
+            print(f"[SCREENSHOT] Error: {e}")
+            message = "Screenshot failed"
+        finally:
+            self.showFullScreen()
+        self.show_toast(message)
+
+    def draw_toast(self, painter):
+        text = self.toast_message
+        painter.setFont(QFont("Segoe UI", 12, QFont.Weight.Bold))
+        metrics = painter.fontMetrics()
+        text_width = metrics.horizontalAdvance(text)
+
+        pad_left = 38
+        pad_right = 26
+        box_height = 46
+        box_width = text_width + pad_left + pad_right
+        box_x = (self.screen_width - box_width) / 2.0
+        box_y = 70.0
+        rect = QRectF(box_x, box_y, box_width, box_height)
+
+        # Background + border, matching the cyberpunk HUD palette
+        painter.setBrush(QColor(0, 10, 30, 230))
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.drawRoundedRect(rect, 12.0, 12.0)
+        painter.setPen(QPen(QColor(0, 180, 255, 220), 1.5))
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.drawRoundedRect(rect, 12.0, 12.0)
+
+        # Gold accent dot
+        dot_cx = box_x + 20
+        dot_cy = box_y + box_height / 2.0
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QColor(255, 200, 0))
+        painter.drawEllipse(QPoint(int(dot_cx), int(dot_cy)), 5, 5)
+
+        # Message text (cyan), vertically centered in the box
+        painter.setPen(QColor(0, 220, 255))
+        text_x = box_x + pad_left
+        text_y = box_y + (box_height + metrics.ascent() - metrics.descent()) / 2.0
+        painter.drawText(int(text_x), int(text_y), text)
 
     def save_to_undo(self):
         self.undo_stack.append(self.canvas.copy())
@@ -267,6 +350,13 @@ class OverlayWindow(QMainWindow):
         painter.setOpacity(self.hud_opacity)
         self.draw_hud(painter)
         painter.setOpacity(1.0)
+
+        # Draw transient toast notification (e.g. screenshot confirmation)
+        if self.toast_message:
+            painter.setOpacity(self.toast_opacity)
+            self.draw_toast(painter)
+            painter.setOpacity(1.0)
+
         painter.end()
 
     def draw_hud(self, painter):

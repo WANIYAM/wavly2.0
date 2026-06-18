@@ -29,7 +29,7 @@ Wavly recognizes **11 distinct hand gestures**. In the **Default System Profile 
 5. **`pinch`** (Label 9) → Left Mouse Click (Exits **Drawing Mode** if active)
 6. **`l_shape`** (Label 8) → Right Mouse Click
 7. **`three_fingers`** (Label 4) → Open On-Screen Keyboard (`Win + Ctrl + O`)
-8. **`four_fingers`** (Label 5) → Take Screenshot (`Win + Shift + S`)
+8. **`four_fingers`** (Label 5) → Capture Screenshot to Clipboard (direct grab, no Snipping Tool; shows an on-screen confirmation)
 9. **`thumbs_up`** (Label 6) → Volume Up
 10. **`thumbs_down`** (Label 7) → Volume Down
 11. **`spider_man`** (Label 10) → Toggle Drawing Mode ON/OFF (Geometric detection: thumb, index, pinky extended; middle and ring curled)

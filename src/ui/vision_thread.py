@@ -61,7 +61,7 @@ class VisionThread(QThread):
         self.voice_responder.stop()
 
     def run(self):
-        cap = cv2.VideoCapture(0)
+        cap = cv2.VideoCapture(1)
 
         if not cap.isOpened():
             print("Error: Could not open webcam")
@@ -212,9 +212,10 @@ class VisionThread(QThread):
                     elif action == "normal":
                         self.mode_changed.emit("normal")
 
-                    # Emit drawing mode gesture commands
+                    # Emit overlay-handled gesture commands (drawing actions + screenshot)
                     if action in ["clear_canvas", "pen_up", "pen_down", "change_color",
-                                  "brush_size_up", "save_drawing", "undo", "redo", "erase_mode"]:
+                                  "brush_size_up", "save_drawing", "undo", "redo", "erase_mode",
+                                  "screenshot"]:
                         print(f"[VISION] emitting command: {action}")
                         self.gesture_command.emit(action)
 

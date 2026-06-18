@@ -220,7 +220,7 @@ Overall health assessment:
   - `point` → precision mode.
   - `two_fingers` → scroll based on hand Y position.
   - `three_fingers` → open on-screen keyboard.
-  - `four_fingers` → screenshot.
+  - `four_fingers` → screenshot (captured directly to the clipboard, no Snipping Tool).
   - `thumbs_up` / `thumbs_down` → volume control.
   - `l_shape` → right click.
   - `pinch` → left click.
