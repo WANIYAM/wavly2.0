@@ -76,7 +76,7 @@ class GestureMapper:
                 self.drawing_mode = False
                 print("[MODE] Drawing → Normal")
                 if self.voice_responder:
-                    self.voice_responder.speak("Drawing mode off")
+                    self.voice_responder.system_speak("Drawing mode off")
                 return "normal"
             drawing_actions = {
                 "fist": "clear_canvas",
@@ -113,7 +113,7 @@ class GestureMapper:
                 self.drawing_mode = True
                 print("[MODE] Normal → Drawing")
                 if self.voice_responder:
-                    self.voice_responder.speak("Drawing mode on")
+                    self.voice_responder.system_speak("Drawing mode on")
                 return "drawing"
             elif gesture_name == "fist":
                 print("[GESTURE] fist → freeze")
