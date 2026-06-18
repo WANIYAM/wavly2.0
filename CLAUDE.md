@@ -93,7 +93,7 @@ src/
 1. Webcam frame is read by the `VisionThread` using OpenCV.
 2. `HandTracker` extracts hand landmark objects.
 3. Landmark coordinates are normalized relative to the wrist (landmark 0) to support position-invariant predictions.
-4. `GesturePredictor` feeds the coordinates into the Random Forest model.
+4. `GesturePredictor` feeds the coordinates into the Random Forest model (some gestures like `spider_man` are detected geometrically prior to the ML step).
 5. `VisionThread` uses a 10-frame buffer (6/10 votes) to confirm predictions.
 6. `GestureMapper` maps predictions to PyAutoGUI movements or keys, checking active window context via `ContextDetector`.
 7. `OverlayWindow` updates drawing lines or modes and animates the bottom-right HUD overlay.

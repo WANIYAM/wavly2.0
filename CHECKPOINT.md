@@ -2,6 +2,10 @@
 
 This document outlines the current status, configurations, structures, and implementation details of the Wavly 2.0 gesture control system.
 
+## Recent Updates (June 18, 2026)
+- **Drawing Mode Trigger Redesign**: Complete. The `two_fingers` 2.0s hold timer has been removed and replaced with a `spider_man` toggle gesture (geometric detection) to enter and exit Drawing Mode.
+- **Voice Announcements**: `VoiceResponder` now announces "Drawing mode on" and "Drawing mode off" when modes switch.
+
 ## Project Structure
 
 ```
@@ -69,10 +73,12 @@ wavly2.0/
 - **`thumbs_down`** $\rightarrow$ Decreases system audio volume (`volumedown`).
 - **`l_shape`** $\rightarrow$ Triggers right-click context menu.
 - **`pinch`** $\rightarrow$ Triggers mouse left-click.
-- **`two_fingers`** (Hold for 2.0s) $\rightarrow$ Switches active application mode from **Normal** to **Drawing**.
+- **`two_fingers`** $\rightarrow$ Switches to scroll mode based on hand Y position.
+- **`spider_man`** $\rightarrow$ Toggles active application mode from **Normal** to **Drawing**.
 
 ### Drawing Mode (Transparent Overlay Drawing Canvas)
 - **`pinch`** $\rightarrow$ Switches active application mode from **Drawing** back to **Normal**.
+- **`spider_man`** $\rightarrow$ Switches active application mode from **Drawing** back to **Normal**.
 - **`fist`** $\rightarrow$ Clears the drawing overlay canvas (`clear_canvas`).
 - **`open_hand`** $\rightarrow$ Lifts the drawing pen up (`pen_up`).
 - **`point`** $\rightarrow$ Lowers the drawing pen to write/draw (`pen_down`).
@@ -109,6 +115,7 @@ wavly2.0/
 - `"thumbs_down"`: 2.0
 - `"l_shape"`: 2.0
 - `"pinch"`: 2.0
+- `"spider_man"`: 2.0
 
 ### 4. Coordinate Normalization Method
 Hand landmark coordinates are normalized relative to the wrist (landmark 0). For each of the 21 landmarks detected by MediaPipe:
