@@ -231,7 +231,7 @@ All dependencies are pinned in `requirements.txt` for reproducible builds.
 | 3 | `point`          | 2     | Precision cursor tracking (0.5× speed)           | Pen down (start drawing)|
 | 4 | `two_fingers`    | 3     | Scroll up/down (based on hand Y)                 | Change brush color      |
 | 5 | `three_fingers`  | 4     | Open on-screen keyboard (`Win+Ctrl+O`)           | Increase brush size     |
-| 6 | `four_fingers`   | 5     | Take screenshot (`Win+Shift+S`)                  | Save drawing to PNG     |
+| 6 | `four_fingers`   | 5     | Screenshot to clipboard (direct grab + toast)    | Save drawing to PNG     |
 | 7 | `thumbs_up`      | 6     | Volume up                                        | Undo                    |
 | 8 | `thumbs_down`    | 7     | Volume down                                      | Redo                    |
 | 9 | `l_shape`        | 8     | Right-click                                      | Toggle eraser mode      |
@@ -310,7 +310,7 @@ Wavly uses a **wake-word activation model** similar to virtual assistants:
 
 - The system starts in **standby mode**, passively listening for the wake word.
 - Primary wake word: **"wavly"**
-- Google Speech Recognition often misinterprets the word, so 10 fuzzy variants are accepted: `wavly`, `wavy`, `wavely`, `wably`, `waverly`, `waveely`, `babli`, `bably`, `baby`, `devli`.
+- Google Speech Recognition often misinterprets the word, so **26 fuzzy variants** are accepted: `wavly`, `wavy`, `wavely`, `wably`, `waverly`, `waveely`, `babli`, `bably`, `baby`, `devli`, `wobbly`, `wavley`, `wally`, `wevley`, `wifely`, `waffly`, `wavvy`, `wabli`, `waveli`, `wahli`, `wovly`, `wobly`, `webly`, `waylee`, `wabley`.
 - Upon detection, the system speaks a randomized Jarvis-style acknowledgment and enters **active session** mode.
 
 ### All 20 Voice Commands
@@ -357,7 +357,9 @@ Wavly uses a **wake-word activation model** similar to virtual assistants:
 ```
 
 - **Standby → Active**: Triggered by detecting any wake word variant.
-- **Active → Standby**: Triggered by any goodbye phrase: `"goodbye"`, `"goodbye wavly"`, `"sleep"`, `"deactivate"`, `"shut down"`, `"stop listening"`.
+- **Active → Standby**: Triggered by goodbye detection using a two-tier matching system:
+  - **Phrase match** (substring): `"goodbye"`, `"goodbye wavly"`, `"stop listening"`, `"shut down"`, `"deactivate"`, `"bye bye"`, `"see you"`, `"see ya"`, `"go to sleep"`, `"power down"`, `"end session"`, `"that's all"`, `"that's it"`, `"thank you wavly"`, `"thanks wavly"`, `"goodnight"`, `"goodnight wavly"`, `"good night"`.
+  - **Keyword match** (whole-word boundary): `"bye"`, `"sleep"`, `"stop"` — with a guard so `"stop"` doesn't trigger inside commands like `"stop presentation"`.
 - **Session Timeout**: Set to `999999` seconds (effectively permanent until explicitly ended).
 - **Ambient Noise Calibration**: Performed once on startup (`1s` duration).
 
@@ -372,7 +374,7 @@ The `VoiceResponder` provides spoken feedback using a multi-engine TTS pipeline 
 | **Command Success**  | *"Done"* / *"Opening Chrome for you"* / *"Scrolling up"*                  |
 | **Mode Switch**      | *"Drawing mode on"* / *"Drawing mode off"* (Announced in real-time)       |
 | **Command Failure**  | *"I'm sorry sir, I couldn't find a mapping for that command."*            |
-| **Session End**      | *"Goodbye sir. Wavly going to standby."*                                  |
+| **Session End**      | *"Goodbye, sir."* / *"See you soon, sir."* / *"Standing by, sir."* / *"Until next time, sir."* / *"Going to sleep, sir. Say my name when you need me."* (randomized from 8 farewells) |
 
 ---
 

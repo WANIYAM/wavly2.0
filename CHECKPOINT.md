@@ -68,7 +68,7 @@ wavly2.0/
 - **`open_hand`** $\rightarrow$ Transitions computer cursor control to `"move"` state (default cursor tracking).
 - **`point`** $\rightarrow$ Transitions computer cursor control to `"precision"` state (tracks cursor at half-speed).
 - **`three_fingers`** $\rightarrow$ Opens the Windows OS virtual on-screen keyboard (`win + ctrl + o`).
-- **`four_fingers`** $\rightarrow$ Takes a screenshot via Windows Snipping Tool (`win + shift + s`).
+- **`four_fingers`** $\rightarrow$ Captures the full screen directly to the clipboard (no Snipping Tool) and shows an on-screen confirmation toast.
 - **`thumbs_up`** $\rightarrow$ Increases system audio volume (`volumeup`).
 - **`thumbs_down`** $\rightarrow$ Decreases system audio volume (`volumedown`).
 - **`l_shape`** $\rightarrow$ Triggers right-click context menu.

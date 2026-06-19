@@ -168,7 +168,7 @@ Gesture behavior includes:
 - `l_shape` → right click
 - `thumbs_up` / `thumbs_down` → volume control
 - `three_fingers` → launch on-screen keyboard
-- `four_fingers` → screenshot
+- `four_fingers` → screenshot (captured directly to clipboard)
 - `spider_man` → toggle drawing mode ON/OFF
 
 ---

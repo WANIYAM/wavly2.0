@@ -62,7 +62,15 @@ class VoiceController:
 
                 if not self.activated:
                     print(f'[VOICE] Standby heard: "{text}"')
-                    wake_words = ["wavly", "wavy", "wavely", "wably", "waverly", "waveely", "babli", "bably", "baby", "devli"]
+                    wake_words = [
+                        # Original variants
+                        "wavly", "wavy", "wavely", "wably", "waverly", "waveely",
+                        "babli", "bably", "baby", "devli",
+                        # Additional phonetic/fuzzy variants
+                        "wobbly", "wavley", "wally", "wevley", "wifely", "waffly",
+                        "wavvy", "wabli", "waveli", "wahli", "wovly", "wobly",
+                        "webly", "waylee", "wavvy", "wabley",
+                    ]
                     if any(word in text for word in wake_words):
                         print("[VOICE] Wake word detected!")
                         if self.voice_responder:
@@ -77,13 +85,46 @@ class VoiceController:
                         print("[VOICE] Listening for command...")
                 else:
                     print(f'[VOICE] Heard: "{text}"')
-                    goodbye_words = ["goodbye", "goodbye wavly", "sleep", "deactivate", "shut down", "stop listening"]
-                    if any(word in text for word in goodbye_words):
+                    # Goodbye phrases: multi-word phrases use substring matching,
+                    # single keywords use word-boundary matching to avoid false positives
+                    # (e.g. "stop" alone must not conflict with "stop presentation")
+                    goodbye_phrases = [
+                        # Original phrases
+                        "goodbye", "goodbye wavly", "stop listening",
+                        "shut down", "deactivate",
+                        # New natural phrases
+                        "bye bye", "see you", "see ya", "go to sleep",
+                        "power down", "end session", "that's all", "that's it",
+                        "thank you wavly", "thanks wavly",
+                        "goodnight", "goodnight wavly", "good night",
+                    ]
+                    # Single keywords that end session only when they appear
+                    # as whole words (not as substrings of other commands)
+                    goodbye_keywords = ["bye", "sleep", "stop"]
+
+                    is_goodbye = False
+                    # 1. Check multi-word phrases via substring
+                    if any(phrase in text for phrase in goodbye_phrases):
+                        is_goodbye = True
+                    # 2. Check single keywords via word-boundary matching
+                    if not is_goodbye:
+                        import re
+                        words_in_text = set(re.findall(r'\b\w+\b', text))
+                        for kw in goodbye_keywords:
+                            if kw in words_in_text:
+                                # Guard: "stop" alone must not conflict with
+                                # "stop presentation" or "stop listening" (already handled)
+                                if kw == "stop" and any(w in text for w in ["presentation", "recording"]):
+                                    continue
+                                is_goodbye = True
+                                break
+
+                    if is_goodbye:
                         self.session_active = False
                         self.activated = False
                         print("[VOICE] Session ended")
                         if self.voice_responder:
-                            self.voice_responder.speak("Goodbye sir. Wavly going to standby.")
+                            self.voice_responder.speak_goodbye_response()
                         continue
                     
                     self.command_queue.put(text)

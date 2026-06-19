@@ -139,9 +139,10 @@ class GestureMapper:
                 print("[GESTURE] three_fingers → keyboard")
                 return "executed"
             elif gesture_name == "four_fingers":
-                pyautogui.hotkey('win', 'shift', 's')
+                # Capture handled by the overlay (direct grab to clipboard + toast),
+                # so we just signal the action instead of opening the Snipping Tool.
                 print("[GESTURE] four_fingers → screenshot")
-                return "executed"
+                return "screenshot"
             elif gesture_name == "thumbs_up":
                 pyautogui.press('volumeup')
                 print("[GESTURE] thumbs_up → volume_up")

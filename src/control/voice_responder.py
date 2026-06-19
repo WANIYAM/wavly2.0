@@ -60,6 +60,20 @@ class VoiceResponder:
         ]
         self.speak(random.choice(responses))
 
+    def speak_goodbye_response(self):
+        import random
+        farewells = [
+            "Goodbye, sir.",
+            "See you soon, sir.",
+            "Standing by, sir.",
+            "Wavly going to standby. Call me anytime, sir.",
+            "Until next time, sir.",
+            "Signing off. Have a good one, sir.",
+            "Going to sleep, sir. Say my name when you need me.",
+            "Session ended. Standing by for your call, sir.",
+        ]
+        self.speak(random.choice(farewells))
+
     def _run_loop(self):
         # Initialize COM apartment for this thread — required for SAPI5 TTS
         # when running alongside PyQt6 which owns the main thread's COM apartment
