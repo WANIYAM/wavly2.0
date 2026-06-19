@@ -75,6 +75,23 @@ Wavly supports fuzzy keyword matching and synonyms. You don't have to say the ex
 
 *Example: Saying "Wavly, pull up the browser please" will successfully detect "browser" and open Chrome.*
 
+### Voice Session Management
+
+#### Wake Words
+
+Wavly starts in **standby mode** and activates when it hears the wake word. Because Google Web Speech API often mishears "Wavly", the following **26 fuzzy/phonetic variants** are all accepted:
+
+`wavly` · `wavy` · `wavely` · `wably` · `waverly` · `waveely` · `babli` · `bably` · `baby` · `devli` · `wobbly` · `wavley` · `wally` · `wevley` · `wifely` · `waffly` · `wavvy` · `wabli` · `waveli` · `wahli` · `wovly` · `wobly` · `webly` · `waylee` · `wabley`
+
+#### Goodbye / Session-End Phrases
+
+To end an active session and return Wavly to standby, say any of these phrases (substring matching, so surrounding words like "okay" or "please" won't break it):
+
+- **Phrases**: `goodbye` · `goodbye wavly` · `stop listening` · `shut down` · `deactivate` · `bye bye` · `see you` · `see ya` · `go to sleep` · `power down` · `end session` · `that's all` · `that's it` · `thank you wavly` · `thanks wavly` · `goodnight` · `goodnight wavly` · `good night`
+- **Keywords** (whole-word match only): `bye` · `sleep` · `stop` (guarded — won't trigger inside "stop presentation")
+
+Goodbye triggers a **randomized farewell response** (e.g. *"See you soon, sir."*, *"Standing by, sir."*, *"Going to sleep, sir. Say my name when you need me."*).
+
 ---
 
 ## Context-Aware Application Profiles
