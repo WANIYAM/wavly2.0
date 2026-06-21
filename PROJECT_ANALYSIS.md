@@ -224,20 +224,15 @@ Overall health assessment:
   - `thumbs_up` / `thumbs_down` → volume control.
   - `l_shape` → right click.
   - `pinch` → left click.
-- Drawing mode mapping:
-  - `pinch` → exit drawing.
-  - `fist` → clear canvas.
-  - `open_hand` → pen up.
-  - `point` → pen down.
-  - `two_fingers` → change color.
-  - `three_fingers` → brush size up.
-  - `four_fingers` → save drawing.
-  - `thumbs_up` → undo.
-  - `thumbs_down` → redo.
-  - `l_shape` → erase mode.
+- Drawing mode mapping (`_execute_drawing`) — discrete commands only; continuous tools (point=draw, open_hand=erase, pinch=grab/move/resize) are applied per-frame by the overlay:
+  - `spider_man` → exit drawing (pinch no longer exits).
+  - `fist` → clear canvas (`clear_canvas`).
+  - `thumbs_up` / `thumbs_down` → stroke size up / down (`size_up` / `size_down`).
+  - `two_fingers` → toggle colour palette (`toggle_palette`).
+  - `four_fingers` → paste clipboard image (`paste_image`).
+  - `point` / `open_hand` / `pinch` → return `None` (handled continuously by the overlay).
 - Hardcoded values:
-  - gesture cooldowns: `0.1` to `3.0` seconds.
-  - drawing mode hold time: `2.0` seconds.
+  - gesture cooldowns: `0.1` to `3.0` seconds; drawing-mode discrete cooldowns `0.45`s (size) / `0.8`s (toggles).
 - Notes: app profile actions use `pyautogui` directly and return `"executed"`.
 
 ### `src/control/mouse_controller.py`
@@ -304,35 +299,36 @@ Overall health assessment:
 ### `src/ui/overlay_window.py`
 - Purpose: Display the transparent full-screen overlay, drawing canvas, and status HUD.
 - Imports: `os`, `time`, `math`, `datetime`, `QMainWindow`, `QApplication`, `Qt`, `QPoint`, `QTimer`, `QStandardPaths`, `QRectF`, `QPainter`, `QPen`, `QColor`, `QPixmap`, `QFont`, `VisionThread`.
-- Class: `OverlayWindow`
+- Class: `OverlayWindow` (drawing surface rewritten June 2026 to tool-follows-gesture)
   - Window flags: frameless, stay-on-top, transparent input, tool.
-  - Creates full-screen `QPixmap` for drawing.
-  - Manages brush color, size, erase mode, undo/redo, gesture/hud state.
-  - Connects `VisionThread` signals for gesture, mode, app, and voice updates.
+  - Creates a full-screen raster stroke `QPixmap` plus an image-object layer; manages colour, stroke size, the active tool, pinch manipulation, and HUD state.
+  - One-Euro pointer smoothing (`OneEuroFilter`) and full-screen edge mapping (`_to_screen` with `draw_margin`).
+  - Connects `VisionThread` signals (`draw_event`, gesture, mode, app, voice).
 - Behaviors:
-  - `handle_gesture_command()`: maps drawing commands to canvas changes.
-  - `update_trail()`: draws line segments in overlay mode.
-  - `paintEvent()`: renders canvas and HUD.
-  - `draw_hud()`: renders a cyberpunk skin with current gesture, mode, app, and voice status.
-  - `draw_arc_reactor()`: animates a glowing ring.
-  - `keyPressEvent()`: `C` clears canvas, `D` toggles drawing, `Esc` closes app.
+  - `on_draw_event()`: per-frame entry point — routes to draw/erase/grab, palette selection, or the toolbar panel.
+  - `_update_manip()` / `_drop_manip()`: pinch grab → move → hold-still Resize → drop; `open_hand` drops instantly.
+  - `_lift_ink_component()`: cuts the connected ink blob under the pinch out of the canvas (`scipy.ndimage.label`, numpy flood-fill fallback).
+  - `_paint_panel()` / `_draw_panel_icon()`: right-edge dwell toolbar with hand-drawn vector icons.
+  - `paintEvent()`: renders canvas, images, panel, palette, cursor, and HUD.
+  - `draw_hud()` / `draw_arc_reactor()`: cyberpunk HUD and animated ring.
+  - `keyPressEvent()`: `C` clears canvas, `Esc` closes app.
 - Hardcoded values:
-  - HUD dimensions: `280x190`.
-  - color palette: 6 colors.
-  - brush size wrap: 2 to 20.
+  - HUD dimensions: `280x190`; colour palette: 8 colours; stroke size range: 2–60.
+  - Manipulation dwell: ~2s (Move/Resize toggle), ~3.5s (drop); panel dwell ~1s.
 - Issues:
-  - maps camera coordinates assuming 640x480 inside `update_trail()`.
+  - Connected-component grab does a full-screen QImage round-trip per pinch (a brief one-off cost).
 
 ### `src/ui/vision_thread.py`
 - Purpose: Main worker thread for camera, gesture recognition, mode execution, and voice command processing.
 - Imports: `cv2`, `time`, `math`, `warnings`, `Counter`, `QThread`, `pyqtSignal`, `HandTracker`, `MouseController`, `GestureMapper`, `GesturePredictor`, `VoiceController`, `VoiceMapper`, `VoiceResponder`.
 - Signals:
-  - `point_detected(int, int)`
+  - `draw_event(dict)` — per-frame drawing state (position, thumb, tool, pinch, gesture); replaces the old `point_detected`
   - `gesture_detected(str)`
   - `gesture_command(str)`
   - `mode_changed(str)`
   - `app_changed(str)`
   - `voice_status_changed(str)`
+  - `frame_ready(object)` — camera preview frame for the HUD PiP
 - Initialization:
   - Creates `HandTracker` with detection/tracking confidence `0.7`.
   - Initializes mouse, gesture mapper, predictor, voice responder, voice listener, and voice mapper.
@@ -394,9 +390,9 @@ Overall health assessment:
 ## 5. All Known Bugs & Issues
 
 ### Gesture issues
-- **Pinch duplication**: `src/ui/vision_thread.py` calls `self.mouse_controller.click()` for geometric pinch and `GestureMapper.execute('pinch')` also performs `pyautogui.click()`.
+- **Pinch duplication**: `src/ui/vision_thread.py` calls `self.mouse_controller.click()` for geometric pinch and `GestureMapper.execute('pinch')` also performs `pyautogui.click()` (normal mode only — drawing mode no longer clicks).
 - **Pinch without classifier confirmation**: geometric pinch detection triggers independently of prediction buffer results.
-- **Fixed 640x480 overlay mapping**: `OverlayWindow.update_trail()` assumes 640x480 camera coordinates.
+- **~~Fixed 640x480 overlay mapping~~** (resolved June 2026): the drawing overlay now maps using the frame dimensions carried in each `draw_event`, and stretches a central band to the full screen for edge reachability.
 
 ### Voice issues
 - **Unused voice timeout**: `VoiceController.session_timeout` is defined but never used.
@@ -416,9 +412,9 @@ Overall health assessment:
 ## 6. Inconsistencies
 
 ### Documentation vs code
-- `REPORT.md`, `CLAUDE.md`, and `README.md` describe advanced air drawing and 3D path tools that are not implemented.
+- `REPORT.md` still lists an "Air Drawing" phase with 3D path tools that are not implemented (2D only).
 - Documented module structure includes non-existent packages such as `src/automation/`.
-- The code supports basic 2D drawing only.
+- Drawing mode is now a full 2D editor (draw/erase/clear, object move/resize, image paste, dwell toolbar) — the earlier "basic 2D drawing only" note is outdated.
 
 ### Mismatched claims
 - Voice documentation claims wake-word activation and spoken session management; the actual implementation is partial and cloud-based.
@@ -518,4 +514,4 @@ Overall health assessment:
 - `src/control/context_detector.py` line ~20: case-sensitive app matching.
 - `src/ui/vision_thread.py` lines ~138-150: buffer confirmation and unknown streak logic.
 - `src/control/mouse_controller.py` line ~58: click cooldown logic.
-- `src/ui/overlay_window.py` line ~185: fixed 640x480 mapping for overlay drawing.
+- `src/ui/overlay_window.py` `_to_screen()`: frame→screen mapping with full-screen edge band (replaced the old fixed 640x480 mapping).

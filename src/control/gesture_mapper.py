@@ -52,8 +52,13 @@ class GestureMapper:
             self.prev_two_fingers_y = None
             return None
 
-        # Action mappings:
-        # two_fingers -> Scroll up/down only (no drawing mode)
+        # DRAWING MODE is handled separately with its own dedup/cooldown so the
+        # continuous tools (point=draw, open_hand=erase, pinch=drag) never fall
+        # through to the normal-mode cursor / scroll / click logic.
+        if self.drawing_mode:
+            return self._execute_drawing(gesture_name)
+
+        # ===================== NORMAL MODE =====================
         # spider_man -> Toggle Drawing Mode
 
         # Continuous gestures that bypass deduplication completely
@@ -70,96 +75,124 @@ class GestureMapper:
         if not self._can_execute(gesture_name):
             return None
 
-        # DRAWING MODE
-        if self.drawing_mode:
-            if gesture_name in ["pinch", "spider_man"]:
-                self.drawing_mode = False
-                print("[MODE] Drawing → Normal")
-                if self.voice_responder:
-                    self.voice_responder.system_speak("Drawing mode off")
-                return "normal"
-            drawing_actions = {
-                "fist": "clear_canvas",
-                "open_hand": "pen_up",
-                "point": "pen_down",
-                "two_fingers": "change_color",
-                "three_fingers": "brush_size_up",
-                "four_fingers": "save_drawing",
-                "thumbs_up": "undo",
-                "thumbs_down": "redo",
-                "l_shape": "erase_mode"
-            }
-            # Fallback for drawing mode if gesture got mapped to up/down
-            resolved_drawing_gesture = gesture_name
-            if resolved_drawing_gesture in ["two_fingers_up", "two_fingers_down"]:
-                resolved_drawing_gesture = "two_fingers"
-
-            if resolved_drawing_gesture in drawing_actions:
-                action = drawing_actions[resolved_drawing_gesture]
-                print(f"[GESTURE] {resolved_drawing_gesture} → {action}")
-                return action
-
-        # NORMAL MODE
-        else:
-            if self.current_app != "default":
-                profile = self.app_profiles.get_profile(self.current_app)
-                if gesture_name in profile:
-                    profile[gesture_name]()
-                    print(f"[GESTURE] {gesture_name} → {self.current_app} action")
-                    return "executed"
-
-            # Default mode gestures
-            if gesture_name == "spider_man":
-                self.drawing_mode = True
-                print("[MODE] Normal → Drawing")
-                if self.voice_responder:
-                    self.voice_responder.system_speak("Drawing mode on")
-                return "drawing"
-            elif gesture_name == "fist":
-                print("[GESTURE] fist → freeze")
-                self.current_mode = "freeze"
-                return "freeze"
-            elif gesture_name == "open_hand":
-                print("[GESTURE] open_hand → move")
-                self.current_mode = "move"
-                return "move"
-            elif gesture_name == "point":
-                print("[GESTURE] point → precision")
-                self.current_mode = "precision"
-                return "precision"
-            elif gesture_name == "two_fingers":
-                if self.current_hand_y < 300:
-                    pyautogui.scroll(3)
-                else:
-                    pyautogui.scroll(-3)
-                print("[GESTURE] two_fingers → scroll")
-                return "scroll"
-            elif gesture_name == "three_fingers":
-                pyautogui.hotkey('win', 'ctrl', 'o')
-                print("[GESTURE] three_fingers → keyboard")
-                return "executed"
-            elif gesture_name == "four_fingers":
-                # Capture handled by the overlay (direct grab to clipboard + toast),
-                # so we just signal the action instead of opening the Snipping Tool.
-                print("[GESTURE] four_fingers → screenshot")
-                return "screenshot"
-            elif gesture_name == "thumbs_up":
-                pyautogui.press('volumeup')
-                print("[GESTURE] thumbs_up → volume_up")
-                return "executed"
-            elif gesture_name == "thumbs_down":
-                pyautogui.press('volumedown')
-                print("[GESTURE] thumbs_down → volume_down")
-                return "executed"
-            elif gesture_name == "l_shape":
-                pyautogui.rightClick()
-                print("[GESTURE] l_shape → right_click")
-                return "executed"
-            elif gesture_name == "pinch":
-                pyautogui.click()
-                print("[GESTURE] pinch → left_click")
+        # App-specific profiles take precedence in normal mode
+        if self.current_app != "default":
+            profile = self.app_profiles.get_profile(self.current_app)
+            if gesture_name in profile:
+                profile[gesture_name]()
+                print(f"[GESTURE] {gesture_name} → {self.current_app} action")
                 return "executed"
 
+        # Default mode gestures
+        if gesture_name == "spider_man":
+            self.drawing_mode = True
+            print("[MODE] Normal → Drawing")
+            if self.voice_responder:
+                self.voice_responder.system_speak("Drawing mode on")
+            return "drawing"
+        elif gesture_name == "fist":
+            print("[GESTURE] fist → freeze")
+            self.current_mode = "freeze"
+            return "freeze"
+        elif gesture_name == "open_hand":
+            print("[GESTURE] open_hand → move")
+            self.current_mode = "move"
+            return "move"
+        elif gesture_name == "point":
+            print("[GESTURE] point → precision")
+            self.current_mode = "precision"
+            return "precision"
+        elif gesture_name == "two_fingers":
+            if self.current_hand_y < 300:
+                pyautogui.scroll(3)
+            else:
+                pyautogui.scroll(-3)
+            print("[GESTURE] two_fingers → scroll")
+            return "scroll"
+        elif gesture_name == "three_fingers":
+            pyautogui.hotkey('win', 'ctrl', 'o')
+            print("[GESTURE] three_fingers → keyboard")
+            return "executed"
+        elif gesture_name == "four_fingers":
+            # Capture handled by the overlay (direct grab to clipboard + toast),
+            # so we just signal the action instead of opening the Snipping Tool.
+            print("[GESTURE] four_fingers → screenshot")
+            return "screenshot"
+        elif gesture_name == "thumbs_up":
+            pyautogui.press('volumeup')
+            print("[GESTURE] thumbs_up → volume_up")
+            return "executed"
+        elif gesture_name == "thumbs_down":
+            pyautogui.press('volumedown')
+            print("[GESTURE] thumbs_down → volume_down")
+            return "executed"
+        elif gesture_name == "l_shape":
+            pyautogui.rightClick()
+            print("[GESTURE] l_shape → right_click")
+            return "executed"
+        elif gesture_name == "pinch":
+            pyautogui.click()
+            print("[GESTURE] pinch → left_click")
+            return "executed"
+
+        return None
+
+    def _execute_drawing(self, gesture_name):
+        """Resolve a confirmed gesture while in drawing mode.
+
+        Continuous tools (point=draw, open_hand=erase, pinch=drag) are applied
+        per-frame by the overlay from the draw_event stream, so they produce no
+        action here. Only the discrete one-shot commands and the exit gesture
+        return a value:
+
+            spider_man   -> exit drawing mode ("normal")   [pinch no longer exits]
+            fist         -> "clear_canvas"
+            thumbs_up    -> "size_up"      (repeats while held, on a cooldown)
+            thumbs_down  -> "size_down"    (repeats while held, on a cooldown)
+            two_fingers  -> "toggle_palette"
+            four_fingers -> "paste_image"
+        """
+        # Exit — spider_man only. Edge-triggered so a held pose exits just once.
+        if gesture_name == "spider_man":
+            if self.last_confirmed_gesture == "spider_man":
+                return None
+            self.last_confirmed_gesture = "spider_man"
+            self.drawing_mode = False
+            print("[MODE] Drawing → Normal")
+            if self.voice_responder:
+                self.voice_responder.system_speak("Drawing mode off")
+            return "normal"
+
+        # Continuous tools — applied by the overlay, nothing to do here.
+        if gesture_name in ["point", "open_hand", "pinch"]:
+            self.last_confirmed_gesture = gesture_name
+            return None
+
+        drawing_actions = {
+            "fist": "clear_canvas",
+            "thumbs_up": "size_up",
+            "thumbs_down": "size_down",
+            "two_fingers": "toggle_palette",
+            "four_fingers": "paste_image",
+        }
+        if gesture_name in drawing_actions:
+            held = (gesture_name == self.last_confirmed_gesture)
+            self.last_confirmed_gesture = gesture_name
+            is_size = gesture_name in ["thumbs_up", "thumbs_down"]
+            # Toggles / clear / paste fire once per fresh show; size stepping is
+            # allowed to repeat while held so the user can hold to keep growing.
+            if held and not is_size:
+                return None
+            now = time.time()
+            cooldown = 0.45 if is_size else 0.8
+            if now - self.last_gesture_times.get(gesture_name, 0) < cooldown:
+                return None
+            self.last_gesture_times[gesture_name] = now
+            print(f"[GESTURE] {gesture_name} → {drawing_actions[gesture_name]}")
+            return drawing_actions[gesture_name]
+
+        # Anything else (three_fingers, l_shape, …): no-op in drawing mode.
+        self.last_confirmed_gesture = gesture_name
         return None
 
     def _set_mode(self, mode):

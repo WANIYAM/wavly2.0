@@ -98,6 +98,15 @@ src/
 6. `GestureMapper` maps predictions to PyAutoGUI movements or keys, checking active window context via `ContextDetector`.
 7. `OverlayWindow` updates drawing lines or modes and animates the bottom-right HUD overlay.
 
+### Drawing Mode (rewritten June 2026)
+
+Drawing mode uses a **tool-follows-gesture** model — the active tool is recomputed every frame from the live gesture; only `point` draws.
+
+- `gesture_mapper._execute_drawing()` resolves **discrete** commands only: `fist`→clear, `thumbs_up`/`thumbs_down`→stroke size, `two_fingers`→palette, `four_fingers`→paste image, `spider_man`→exit. `point`/`open_hand`/`pinch` return `None`.
+- `vision_thread` streams a per-frame `draw_event` **dict** (`{x, y, tx, ty, tool, pinching, gesture, present, frame_w, frame_h}`) to the overlay; `OverlayWindow.on_draw_event()` owns all canvas manipulation.
+- Tools: `point`=draw, `open_hand`=erase (and instant-drop a grabbed element), `pinch`=grab the connected ink blob or image (move; hold still ~2s→Resize/scale; ~3.5s→drop). Grabbed images rise to the top.
+- The pointer is **One-Euro smoothed**; `_to_screen()` stretches a central frame band to the full screen so edges/corners are reachable. Pasted images keep their original pixmap (crisp at any scale). A right-edge **dwell toolbar** (`_paint_panel`) mirrors every tool and highlights the live one. Connected-component grab uses `scipy.ndimage` (numpy flood-fill fallback). Leaving drawing mode hides but retains the canvas + images.
+
 ## Development Guidelines
 
 ### Adding New Gestures

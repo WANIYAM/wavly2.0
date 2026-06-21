@@ -145,12 +145,13 @@ All dependencies are pinned in `requirements.txt` for reproducible builds.
 **What Was Built**:
 - Created `OverlayWindow` (`src/ui/overlay_window.py`) — a fullscreen PyQt6 transparent window.
 - Window flags: `FramelessWindowHint | WindowStaysOnTopHint | WindowTransparentForInput | Tool`.
-- Implemented a `QPixmap` canvas buffer for drawing mode with:
-  - 6 brush colors (Red, Blue, Green, Yellow, Purple, White) with cyclic switching.
-  - Adjustable brush size (2–20px, increments of 2).
-  - Eraser mode using `CompositionMode_Clear`.
-  - Undo/redo stacks (up to 10 snapshots).
-  - Save-to-PNG functionality (timestamped files to Pictures folder).
+- Implemented a `QPixmap` canvas buffer + image-object layer for drawing mode (rewritten June 2026 to a tool-follows-gesture model) with:
+  - 8-colour palette in a gesture-toggled popup, picked by dwelling the pointer on a swatch.
+  - Adjustable stroke size (2–60px) via `thumbs_up`/`thumbs_down` or the toolbar.
+  - Pointer-style eraser using `CompositionMode_Clear`; `fist` clears the whole canvas.
+  - Object-aware pinch manipulation: grab a stroke/image, move it, hold still to resize, open palm to drop.
+  - Clipboard image paste that stays crisp at any scale (scaled from the original each frame).
+  - A One-Euro–smoothed pointer and a right-edge dwell-to-activate toolbar with hand-drawn icons.
 - Built a **cyberpunk-themed HUD panel** (bottom-right, 280×190px) displaying:
   - Current gesture name (cyan text).
   - Active mode — NORMAL (green) / DRAWING (blue).
@@ -224,19 +225,25 @@ All dependencies are pinned in `requirements.txt` for reproducible builds.
 
 ### All 11 Gestures and Their Default Actions
 
-| # | Gesture          | Label | Normal Mode Action                               | Drawing Mode Action     |
-|---|:-----------------|:-----:|:-------------------------------------------------|:------------------------|
-| 1 | `fist`           | 0     | Freeze cursor (stop movement)                    | Clear canvas            |
-| 2 | `open_hand`      | 1     | Normal cursor tracking (1.0× speed)              | Pen up (stop drawing)   |
-| 3 | `point`          | 2     | Precision cursor tracking (0.5× speed)           | Pen down (start drawing)|
-| 4 | `two_fingers`    | 3     | Scroll up/down (based on hand Y)                 | Change brush color      |
-| 5 | `three_fingers`  | 4     | Open on-screen keyboard (`Win+Ctrl+O`)           | Increase brush size     |
-| 6 | `four_fingers`   | 5     | Screenshot to clipboard (direct grab + toast)    | Save drawing to PNG     |
-| 7 | `thumbs_up`      | 6     | Volume up                                        | Undo                    |
-| 8 | `thumbs_down`    | 7     | Volume down                                      | Redo                    |
-| 9 | `l_shape`        | 8     | Right-click                                      | Toggle eraser mode      |
-| 10| `pinch`          | 9     | Left-click                                       | Exit Drawing → Normal   |
-| 11| `spider_man`     | 10    | Toggle Drawing Mode ON                           | Toggle Drawing Mode OFF |
+| # | Gesture          | Label | Normal Mode Action                               | Drawing Mode Action                         |
+|---|:-----------------|:-----:|:-------------------------------------------------|:--------------------------------------------|
+| 1 | `fist`           | 0     | Freeze cursor (stop movement)                    | Clear the whole canvas                      |
+| 2 | `open_hand`      | 1     | Normal cursor tracking (1.0× speed)              | Erase along the pointer path; **drops** a grabbed element |
+| 3 | `point`          | 2     | Precision cursor tracking (0.5× speed)           | **Draw** (the only gesture that draws)      |
+| 4 | `two_fingers`    | 3     | Scroll up/down (based on hand Y)                 | Toggle the colour palette popup             |
+| 5 | `three_fingers`  | 4     | Open on-screen keyboard (`Win+Ctrl+O`)           | *(unused in drawing mode)*                  |
+| 6 | `four_fingers`   | 5     | Screenshot to clipboard (direct grab + toast)    | Paste an image from the clipboard           |
+| 7 | `thumbs_up`      | 6     | Volume up                                        | Increase stroke size                        |
+| 8 | `thumbs_down`    | 7     | Volume down                                      | Decrease stroke size                        |
+| 9 | `l_shape`        | 8     | Right-click                                      | *(unused in drawing mode)*                  |
+| 10| `pinch`          | 9     | Left-click                                       | Grab the stroke/image under the fingers → move + resize |
+| 11| `spider_man`     | 10    | Toggle Drawing Mode ON                           | Toggle Drawing Mode OFF                     |
+
+> **Drawing mode is a "tool-follows-gesture" surface (rewritten June 2026).** The active tool is recomputed every frame from the live gesture — only `point` draws, and switching gesture switches tool instantly. The index-fingertip pointer is smoothed with a One-Euro filter, and a central band of the camera frame is stretched onto the full screen so every edge/corner is reachable.
+>
+> **Pinch manipulation**: pinching grabs the connected ink blob (via `scipy.ndimage` connected-components) or the image under the thumb-index midpoint, raising images to the top (z-order). It starts in **Move** mode (translate only); **hold still ~2 s** to toggle **Resize** mode (scale by thumb-index distance, for strokes and images alike); **keep holding to ~3.5 s** to drop, or **open your palm** to drop instantly. Pasted images keep their original full-resolution pixmap and are re-scaled every frame, so they stay crisp at any size.
+>
+> **Dwell toolbar**: a persistent panel on the **right edge** with hand-drawn (non-emoji) icons — draw, eraser, stroke +/−, colour, paste, clear. Hover the pointer over a button for ~1 s to activate it; the panel highlights whichever tool is live (so picking a tool by gesture updates the panel automatically). Leaving drawing mode hides the canvas + images but keeps them in memory, so they reappear on re-entry.
 
 ### ML Model Details
 
@@ -505,7 +512,7 @@ wavly2.0/
 │  • Receives signals from VisionThread                               │
 │                                                                     │
 │  Signals received:                                                  │
-│    point_detected  → update_trail()      (drawing coordinates)      │
+│    draw_event      → on_draw_event()     (per-frame drawing state)  │
 │    gesture_detected → update_gesture_hud() (HUD label update)       │
 │    gesture_command → handle_gesture_command() (drawing actions)      │
 │    mode_changed    → update_system_mode() (normal ↔ drawing)        │
@@ -654,16 +661,18 @@ wavly2.0/
 
 ---
 
-### 🟡 Issue #2: Drawing Mode Pending Improvements
+### 🟢 Issue #2: Drawing Mode — Reworked (June 2026)
 
 **Severity**: Low  
-**Status**: Functional but incomplete
+**Status**: Resolved / reworked
 
-**Description**: The transparent overlay drawing canvas is operational but has areas pending enhancement:
+**Description**: The earlier drawing canvas (toggle-based pen, upward-only brush size, no element editing) was fully rewritten into a tool-follows-gesture surface:
 
-- **No shape tools** — Only freehand drawing is available. No line, circle, or rectangle tools exist yet.
-- **Brush size cycles only upward** — Size wraps from 20 back to 2; there is no decrease gesture.
-- **Canvas is not interactive** — The `WindowTransparentForInput` flag means users cannot interact with drawn content via mouse.
+- **Stroke size now goes both ways** — `thumbs_up`/`thumbs_down` or the toolbar increase/decrease size (2–60px).
+- **Object editing** — pinch grabs the stroke/image under your fingers to move it; hold still to resize; open palm to drop; grabbed images rise to the top.
+- **Toolbar + clipboard images** — a right-edge dwell-to-activate panel exposes every tool, and clipboard images can be pasted and scaled without pixelation.
+
+**Remaining nice-to-haves**: shape tools (line/circle/rectangle) are still freehand-only.
 
 ---
 

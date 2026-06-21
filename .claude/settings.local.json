@@ -10,7 +10,8 @@
       "Bash(awk -F',' '{print $1}' \"D:\\\\wavly2.0\\\\data\\\\gestures.csv\")",
       "Bash(awk -F',' '{print NF}')",
       "Bash(awk -F',' 'NR==1 {for\\(i=1;i<=NF;i++\\) printf \"Column %d: %s\\\\n\", i, \\(i==1 ? \"label\" : sprintf\\(\"coord_%d\", i-1\\)\\)}' \"D:\\\\wavly2.0\\\\data\\\\gestures.csv\")",
-      "Bash(awk *)"
+      "Bash(awk *)",
+      "Bash(venv/Scripts/python.exe -m py_compile src/ui/overlay_window.py src/ui/vision_thread.py src/control/gesture_mapper.py)"
     ]
   }
 }
