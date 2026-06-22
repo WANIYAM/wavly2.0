@@ -32,7 +32,7 @@ def main():
     tracker = HandTracker(max_hands=1, detection_confidence=0.7, tracking_confidence=0.7)
     collector = DataCollector()
 
-    cap = cv2.VideoCapture(1)
+    cap = cv2.VideoCapture(0)
     if not cap.isOpened():
         print("[ERROR] Could not open webcam.")
         return

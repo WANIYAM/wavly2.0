@@ -164,14 +164,23 @@ Gesture behavior includes:
 - `point` → precision cursor movement mode
 - `fist` → freeze cursor
 - `two_fingers` → scroll
+<<<<<<< HEAD
 - `pinch` → left click (in drawing mode: grab + move/resize a stroke or image)
+=======
+- `pinch` → left click or exit drawing mode
+>>>>>>> fix/drawing-mode
 - `l_shape` → right click
 - `thumbs_up` / `thumbs_down` → volume control (in drawing mode: stroke size +/-)
 - `three_fingers` → launch on-screen keyboard
+<<<<<<< HEAD
 - `four_fingers` → screenshot to clipboard (in drawing mode: paste image from clipboard)
 - `spider_man` → toggle drawing mode ON/OFF
 
 In **drawing mode** the per-frame tool follows the gesture: `point` draws, `open_hand` erases (and drops a grabbed element), `fist` clears, `two_fingers` toggles the colour palette.
+=======
+- `four_fingers` → screenshot
+- `spider_man` → toggle drawing mode ON/OFF
+>>>>>>> fix/drawing-mode
 
 ---
 

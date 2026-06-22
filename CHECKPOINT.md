@@ -2,10 +2,16 @@
 
 This document outlines the current status, configurations, structures, and implementation details of the Wavly 2.0 gesture control system.
 
+<<<<<<< HEAD
 ## Recent Updates (June 2026)
 - **Drawing Mode — Full Rewrite**: Replaced the toggle-based pen model with a **tool-follows-gesture** surface. The tool is recomputed every frame from the live gesture (only `point` draws). Added: pointer-style erase (`open_hand`), clear-all (`fist`), object-aware pinch manipulation (grab a stroke/image → move → hold still to resize → drop, with `open_hand` as an instant drop), `thumbs_up`/`thumbs_down` stroke sizing, a gesture-toggled colour palette (`two_fingers`), clipboard image paste (`four_fingers`), and a dwell-activated right-edge toolbar. The index pointer is One-Euro smoothed, a central frame band maps to the full screen (edge reachability), and pasted images stay crisp at any scale. `vision_thread` now streams a per-frame `draw_event` dict to the overlay (replacing `point_detected`). Exit is `spider_man` only (pinch is now grab).
 - **Drawing Mode Trigger Redesign**: The `two_fingers` 2.0s hold timer was removed and replaced with a `spider_man` toggle gesture (geometric detection) to enter/exit Drawing Mode.
 - **Voice Announcements**: `VoiceResponder` announces "Drawing mode on" and "Drawing mode off" when modes switch.
+=======
+## Recent Updates (June 18, 2026)
+- **Drawing Mode Trigger Redesign**: Complete. The `two_fingers` 2.0s hold timer has been removed and replaced with a `spider_man` toggle gesture (geometric detection) to enter and exit Drawing Mode.
+- **Voice Announcements**: `VoiceResponder` now announces "Drawing mode on" and "Drawing mode off" when modes switch.
+>>>>>>> fix/drawing-mode
 
 ## Project Structure
 
@@ -77,6 +83,7 @@ wavly2.0/
 - **`two_fingers`** $\rightarrow$ Switches to scroll mode based on hand Y position.
 - **`spider_man`** $\rightarrow$ Toggles active application mode from **Normal** to **Drawing**.
 
+<<<<<<< HEAD
 ### Drawing Mode (Tool-Follows-Gesture Overlay Canvas)
 The active tool is recomputed every frame from the live gesture; only `point` draws.
 - **`point`** $\rightarrow$ **Draw** (the only gesture that draws).
@@ -89,6 +96,20 @@ The active tool is recomputed every frame from the live gesture; only `point` dr
 - **`four_fingers`** $\rightarrow$ Paste an image from the clipboard (`paste_image`).
 - **`spider_man`** $\rightarrow$ Exit Drawing Mode (pinch no longer exits).
 - **Right-edge toolbar**: dwell the pointer ~1 s on a button (draw, eraser, stroke +/−, colour, paste, clear); it highlights the live tool. `three_fingers` / `l_shape` are unused in drawing mode.
+=======
+### Drawing Mode (Transparent Overlay Drawing Canvas)
+- **`pinch`** $\rightarrow$ Switches active application mode from **Drawing** back to **Normal**.
+- **`spider_man`** $\rightarrow$ Switches active application mode from **Drawing** back to **Normal**.
+- **`fist`** $\rightarrow$ Clears the drawing overlay canvas (`clear_canvas`).
+- **`open_hand`** $\rightarrow$ Lifts the drawing pen up (`pen_up`).
+- **`point`** $\rightarrow$ Lowers the drawing pen to write/draw (`pen_down`).
+- **`two_fingers`** $\rightarrow$ Cyclically changes current brush color (`change_color`).
+- **`three_fingers`** $\rightarrow$ Increases brush size (`brush_size_up`).
+- **`four_fingers`** $\rightarrow$ Saves the current canvas drawing to an image file (`save_drawing`).
+- **`thumbs_up`** $\rightarrow$ Performs an undo action (`undo`).
+- **`thumbs_down`** $\rightarrow$ Performs a redo action (`redo`).
+- **`l_shape`** $\rightarrow$ Toggles eraser brush mode (`erase_mode`).
+>>>>>>> fix/drawing-mode
 
 ---
 
