@@ -12,7 +12,7 @@ Wavly is an intelligent, touchless user interface system that translates real-ti
 - **✅ Phase 2 — Mouse Control**: Cursor movement tracking, coordinate smoothing (exponential weighted moving average), and click handling.
 - **✅ Phase 3 — Gesture Recognition (99.66% accuracy)**: Custom gesture classifier utilizing a RandomForest classifier model trained on a 10-gesture dataset.
 - **✅ Phase 5 — Context Awareness**: Dynamic detection of foreground active windows and context-sensitive application profiles.
-- **✅ Phase 6 — UI Overlay & Drawing Mode**: Transparent overlay canvas (Drawing Mode toggled by the spider_man gesture). Rewritten June 2026 into a tool-follows-gesture surface — draw/erase/clear, pinch to grab & move/resize strokes and images, clipboard image paste, a smoothed pointer, and a dwell-activated on-screen toolbar.
+- **✅ Phase 6 — UI Overlay**: Transparent overlay drawing canvas (Drawing Mode) with custom painter tools (brush size, colors, erase, undo/redo).
 - **✅ Phase 8 — Presentation Mode**: Custom PowerPoint presentation control actions with transition delays.
 - **✅ Phase 9 — Voice Integration**: Threaded background speech command listener utilizing Google Web Speech API and PyAudio to trigger system automation.
 
@@ -25,37 +25,13 @@ Wavly recognizes **11 distinct hand gestures**. In the **Default System Profile 
 1. **`open_hand`** (Label 1) → Normal Cursor Mode (Default pointer tracking)
 2. **`point`** (Label 2) → Precise Cursor Mode (Slower, fine-grain mouse control)
 3. **`fist`** (Label 0) → Freeze Cursor (Stops all mouse movement)
-4. **`two_fingers`** (Label 3) → Scroll Mode (Triggers vertical scroll based on hand movement)
-5. **`pinch`** (Label 9) → Left Mouse Click *(in Drawing Mode: grab and move/resize the stroke or image under your fingers)*
+4. **`two_fingers`** (Label 3) → Scroll Mode (Triggers vertical scroll based on hand movement / Hold for 2 seconds to enter **Drawing Mode**)
+5. **`pinch`** (Label 9) → Left Mouse Click (Exits **Drawing Mode** if active)
 6. **`l_shape`** (Label 8) → Right Mouse Click
 7. **`three_fingers`** (Label 4) → Open On-Screen Keyboard (`Win + Ctrl + O`)
 8. **`four_fingers`** (Label 5) → Capture Screenshot to Clipboard (direct grab, no Snipping Tool; shows an on-screen confirmation)
 9. **`thumbs_up`** (Label 6) → Volume Up
 10. **`thumbs_down`** (Label 7) → Volume Down
-11. **`spider_man`** (Label 10) → Toggle Drawing Mode ON/OFF (Geometric detection: thumb, index, pinky extended; middle and ring curled)
-
----
-
-## Drawing Mode
-
-Make the **spider_man** gesture to drop a transparent canvas over your screen. Drawing Mode is **tool-follows-gesture** — the active tool is whatever your hand is doing right now, and only the index finger draws:
-
-| Gesture | Action |
-|:--------|:-------|
-| **`point`** (index finger) | **Draw** — the only gesture that draws |
-| **`open_hand`** (open palm) | **Erase** along the pointer path · also **drops** a grabbed element instantly |
-| **`fist`** | **Clear** the whole canvas |
-| **`pinch`** (thumb + index) | **Grab** the stroke/image under your fingers, then **move** it (and **resize** in Resize mode) |
-| **`thumbs_up` / `thumbs_down`** | Increase / decrease stroke size |
-| **`two_fingers`** | Toggle the colour palette popup (dwell on a swatch to pick) |
-| **`four_fingers`** | Paste an image from the clipboard |
-| **`spider_man`** | Exit Drawing Mode |
-
-**Moving & resizing elements** — Pinch over a stroke or image to grab it (grabbed images jump to the front). It starts in **Move** mode; **hold it still for ~2 s** to switch to **Resize** mode, then spread/close your thumb and index to scale it. **Hold still ~3.5 s** or **open your palm** to drop it. Pasted images and screenshots stay crisp at any size.
-
-**On-screen toolbar** — A panel on the **right edge** mirrors every tool with hand-drawn icons (draw, eraser, stroke +/−, colour, paste, clear). **Hover the pointer over a button for ~1 second** to activate it — no gesture needed. The panel always highlights the tool you're currently using, so switching tools by gesture updates it automatically.
-
-Leaving Drawing Mode hides your work but keeps it in memory — re-enter and it reappears exactly as you left it. The pointer is One-Euro smoothed, and you can reach every edge and corner of the screen.
 
 ---
 

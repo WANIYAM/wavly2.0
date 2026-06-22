@@ -225,6 +225,7 @@ All dependencies are pinned in `requirements.txt` for reproducible builds.
 
 ### All 11 Gestures and Their Default Actions
 
+<<<<<<< HEAD
 | # | Gesture          | Label | Normal Mode Action                               | Drawing Mode Action                         |
 |---|:-----------------|:-----:|:-------------------------------------------------|:--------------------------------------------|
 | 1 | `fist`           | 0     | Freeze cursor (stop movement)                    | Clear the whole canvas                      |
@@ -244,6 +245,21 @@ All dependencies are pinned in `requirements.txt` for reproducible builds.
 > **Pinch manipulation**: pinching grabs the connected ink blob (via `scipy.ndimage` connected-components) or the image under the thumb-index midpoint, raising images to the top (z-order). It starts in **Move** mode (translate only); **hold still ~2 s** to toggle **Resize** mode (scale by thumb-index distance, for strokes and images alike); **keep holding to ~3.5 s** to drop, or **open your palm** to drop instantly. Pasted images keep their original full-resolution pixmap and are re-scaled every frame, so they stay crisp at any size.
 >
 > **Dwell toolbar**: a persistent panel on the **right edge** with hand-drawn (non-emoji) icons — draw, eraser, stroke +/−, colour, paste, clear. Hover the pointer over a button for ~1 s to activate it; the panel highlights whichever tool is live (so picking a tool by gesture updates the panel automatically). Leaving drawing mode hides the canvas + images but keeps them in memory, so they reappear on re-entry.
+=======
+| # | Gesture          | Label | Normal Mode Action                               | Drawing Mode Action     |
+|---|:-----------------|:-----:|:-------------------------------------------------|:------------------------|
+| 1 | `fist`           | 0     | Freeze cursor (stop movement)                    | Clear canvas            |
+| 2 | `open_hand`      | 1     | Normal cursor tracking (1.0× speed)              | Pen up (stop drawing)   |
+| 3 | `point`          | 2     | Precision cursor tracking (0.5× speed)           | Pen down (start drawing)|
+| 4 | `two_fingers`    | 3     | Scroll up/down (based on hand Y)                 | Change brush color      |
+| 5 | `three_fingers`  | 4     | Open on-screen keyboard (`Win+Ctrl+O`)           | Increase brush size     |
+| 6 | `four_fingers`   | 5     | Take screenshot (`Win+Shift+S`)                  | Save drawing to PNG     |
+| 7 | `thumbs_up`      | 6     | Volume up                                        | Undo                    |
+| 8 | `thumbs_down`    | 7     | Volume down                                      | Redo                    |
+| 9 | `l_shape`        | 8     | Right-click                                      | Toggle eraser mode      |
+| 10| `pinch`          | 9     | Left-click                                       | Exit Drawing → Normal   |
+| 11| `spider_man`     | 10    | Toggle Drawing Mode ON                           | Toggle Drawing Mode OFF |
+>>>>>>> fix/drawing-mode
 
 ### ML Model Details
 
@@ -668,11 +684,17 @@ wavly2.0/
 
 **Description**: The earlier drawing canvas (toggle-based pen, upward-only brush size, no element editing) was fully rewritten into a tool-follows-gesture surface:
 
+<<<<<<< HEAD
 - **Stroke size now goes both ways** — `thumbs_up`/`thumbs_down` or the toolbar increase/decrease size (2–60px).
 - **Object editing** — pinch grabs the stroke/image under your fingers to move it; hold still to resize; open palm to drop; grabbed images rise to the top.
 - **Toolbar + clipboard images** — a right-edge dwell-to-activate panel exposes every tool, and clipboard images can be pasted and scaled without pixelation.
 
 **Remaining nice-to-haves**: shape tools (line/circle/rectangle) are still freehand-only.
+=======
+- **No shape tools** — Only freehand drawing is available. No line, circle, or rectangle tools exist yet.
+- **Brush size cycles only upward** — Size wraps from 20 back to 2; there is no decrease gesture.
+- **Canvas is not interactive** — The `WindowTransparentForInput` flag means users cannot interact with drawn content via mouse.
+>>>>>>> fix/drawing-mode
 
 ---
 
