@@ -1283,11 +1283,7 @@ class OverlayWindow(QMainWindow):
         painter.setFont(QFont("Segoe UI", 9))
         painter.setPen(QColor(120, 130, 150))
         if self.system_mode == "DRAWING":
-<<<<<<< HEAD
-            hint_text = "point=draw  pinch=grab  open palm=drop  (right panel: tools)"
-=======
             hint_text = "Hint: Pinch or Spider-Man to exit drawing"
->>>>>>> fix/drawing-mode
         else:
             hint_text = "Hint: Spider-Man gesture to draw"
         painter.drawText(int(content_x), int(hud_y + hud_height - 12), hint_text)
