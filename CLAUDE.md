@@ -93,16 +93,25 @@ src/
 1. Webcam frame is read by the `VisionThread` using OpenCV.
 2. `HandTracker` extracts hand landmark objects.
 3. Landmark coordinates are normalized relative to the wrist (landmark 0) to support position-invariant predictions.
-4. `GesturePredictor` feeds the coordinates into the Random Forest model.
+4. `GesturePredictor` feeds the coordinates into the Random Forest model (some gestures like `spider_man` are detected geometrically prior to the ML step).
 5. `VisionThread` uses a 10-frame buffer (6/10 votes) to confirm predictions.
 6. `GestureMapper` maps predictions to PyAutoGUI movements or keys, checking active window context via `ContextDetector`.
 7. `OverlayWindow` updates drawing lines or modes and animates the bottom-right HUD overlay.
+
+### Drawing Mode (rewritten June 2026)
+
+Drawing mode uses a **tool-follows-gesture** model — the active tool is recomputed every frame from the live gesture; only `point` draws.
+
+- `gesture_mapper._execute_drawing()` resolves **discrete** commands only: `fist`→clear, `thumbs_up`/`thumbs_down`→stroke size, `two_fingers`→palette, `four_fingers`→paste image, `spider_man`→exit. `point`/`open_hand`/`pinch` return `None`.
+- `vision_thread` streams a per-frame `draw_event` **dict** (`{x, y, tx, ty, tool, pinching, gesture, present, frame_w, frame_h}`) to the overlay; `OverlayWindow.on_draw_event()` owns all canvas manipulation.
+- Tools: `point`=draw, `open_hand`=erase (and instant-drop a grabbed element), `pinch`=grab the connected ink blob or image (move; hold still ~2s→Resize/scale; ~3.5s→drop). Grabbed images rise to the top.
+- The pointer is **One-Euro smoothed**; `_to_screen()` stretches a central frame band to the full screen so edges/corners are reachable. Pasted images keep their original pixmap (crisp at any scale). A right-edge **dwell toolbar** (`_paint_panel`) mirrors every tool and highlights the live one. Connected-component grab uses `scipy.ndimage` (numpy flood-fill fallback). Leaving drawing mode hides but retains the canvas + images.
 
 ## Development Guidelines
 
 ### Adding New Gestures
 
-1. Open a terminal and run `python record_gestures.py` to capture live normalized landmark coordinates. Assign numeric keys to labels. This appends data directly to `data/gestures.csv`.
+1. Open a terminal and run `python record_gestures.py` to capture live normalized landmark coordinates. Numeric keys `0-9` are bound to a fixed set of gesture labels (`fist`, `open_hand`, `point`, `two_fingers`, `three_fingers`, `four_fingers`, `thumbs_up`, `thumbs_down`, `l_shape`, `pinch`) via the `GESTURE_LABELS` dict — edit that dict to add new labels. Press `R` to toggle recording, `Q` to quit. This appends data directly to `data/gestures.csv`.
 2. Run `python src/ai/trainer.py` to re-train the Random Forest model and write `data/gesture_model.pkl` to disk.
 3. Map the confirmed gesture to system actions in `src/control/gesture_mapper.py` (and add app-specific mappings in `src/control/app_profiles.py` if needed).
 4. Launch `python main.py` to verify system behavior.
@@ -111,6 +120,11 @@ src/
 
 - PyAutoGUI has a built-in failsafe (slam mouse pointer into any screen corner to immediately abort).
 - Test keyboard and click automations in a safe test environment first.
+
+### Gotchas
+
+- **Camera index is hardcoded and inconsistent.** The main app (`src/ui/vision_thread.py`) and `test_gestures.py` use `cv2.VideoCapture(0)`, but `record_gestures.py` uses `cv2.VideoCapture(1)`. If recording fails to open the webcam or grabs the wrong camera, change the index to match your hardware.
+- **Windows-only runtime.** `main.py` calls `ctypes.windll.user32.SetProcessDPIAware()` and `context_detector.py`/voice modules rely on `pywin32`/`PyGetWindow`, so the app targets Windows despite the cross-platform venv instructions.
 
 ## Data & Models
 

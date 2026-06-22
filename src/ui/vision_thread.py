@@ -17,7 +17,9 @@ warnings.filterwarnings("ignore")
 
 class VisionThread(QThread):
     # Signals to communicate with the PyQt main thread
-    point_detected = pyqtSignal(int, int)
+    # draw_event carries the full per-frame drawing state (position + active
+    # tool + pinch) while in drawing mode; the overlay owns canvas manipulation.
+    draw_event = pyqtSignal(dict)
     gesture_detected = pyqtSignal(str)
     gesture_command = pyqtSignal(str)
     mode_changed = pyqtSignal(str)
@@ -34,10 +36,10 @@ class VisionThread(QThread):
             tracking_confidence=0.7
         )
         self.mouse_controller = MouseController()
-        self.gesture_mapper = GestureMapper()
-        self.gesture_predictor = GesturePredictor()
         self.voice_responder = VoiceResponder()
         self.voice_responder.start()
+        self.gesture_mapper = GestureMapper(voice_responder=self.voice_responder)
+        self.gesture_predictor = GesturePredictor()
         self.voice_controller = VoiceController(voice_responder=self.voice_responder)
         self.voice_mapper = VoiceMapper(voice_responder=self.voice_responder)
 
@@ -47,7 +49,13 @@ class VisionThread(QThread):
         self.unknown_streak = 0
         self.last_logged_gesture = None
         self.pinch_active = False
+        # Separate hysteretic pinch state used for drawing-mode object drag
+        # (deliberate pinch-and-hold), kept apart from the normal-mode click.
+        self.draw_pinching = False
         self.last_voice_status = "STANDBY"
+        # Tracks whether the cursor was moving last frame, so we clutch (reseed)
+        # only on the moving -> not-moving transition rather than every frame.
+        self.prev_should_move = False
 
     def stop(self):
         if not self.running:
@@ -120,14 +128,33 @@ class VisionThread(QThread):
 
                 self.gesture_mapper.update_hand_position(index_fingertip[1])
 
-                # Emit drawing coordinates to the UI thread
-                self.point_detected.emit(index_fingertip[0], index_fingertip[1])
-
                 # Predict gesture using ML model (use normalized landmarks)
                 raw_landmarks = [(lm.x, lm.y) for lm in landmarks.landmark]
-                wrist_x, wrist_y = raw_landmarks[0]
-                normalized_landmarks = [(x - wrist_x, y - wrist_y) for x, y in raw_landmarks]
+                wrist_x_norm, wrist_y_norm = raw_landmarks[0]
+                normalized_landmarks = [(x - wrist_x_norm, y - wrist_y_norm) for x, y in raw_landmarks]
                 predicted_gesture = self.gesture_predictor.predict(normalized_landmarks)
+
+                # Geometric Spider-Man check
+                wrist_pos = landmark_list[0]
+                thumb_tip = landmark_list[4]
+                thumb_mcp = landmark_list[2]
+                # index_fingertip is already landmark_list[8]
+                # index_pip is already landmark_list[6]
+                middle_fingertip = landmark_list[12]
+                middle_pip = landmark_list[10]
+                ring_fingertip = landmark_list[16]
+                ring_pip = landmark_list[14]
+                pinky_fingertip = landmark_list[20]
+                pinky_pip = landmark_list[18]
+
+                is_thumb_extended = abs(thumb_tip[0] - wrist_pos[0]) > abs(thumb_mcp[0] - wrist_pos[0])
+                is_index_extended = index_fingertip[1] < index_pip[1] - 15
+                is_middle_curled = middle_fingertip[1] > middle_pip[1] - 10
+                is_ring_curled = ring_fingertip[1] > ring_pip[1] - 10
+                is_pinky_extended = pinky_fingertip[1] < pinky_pip[1] - 15
+
+                if is_thumb_extended and is_index_extended and is_middle_curled and is_ring_curled and is_pinky_extended:
+                    predicted_gesture = "spider_man"
 
                 # Add prediction to buffer
                 self.gesture_buffer.append(predicted_gesture)
@@ -157,71 +184,119 @@ class VisionThread(QThread):
                     print(f"[BUFFER] confirmed: {confirmed_gesture} ({vote_count}/10 votes)")
                     self.last_logged_gesture = confirmed_gesture
 
-                # Pinch detection
+                # Geometric pinch distance (thumb tip ↔ index tip).
                 pinch_distance = math.sqrt(
                     (thumb_tip[0] - index_fingertip[0]) ** 2 +
                     (thumb_tip[1] - index_fingertip[1]) ** 2
                 )
 
-                # Check if index finger is curled (y positions are close)
-                is_index_curled = abs(index_fingertip[1] - index_pip[1]) < 30
+                # Hysteretic pinch state for drawing-mode drag: latch on when the
+                # fingers close past 45px, release only past 70px so a held drag
+                # doesn't flicker.
+                if self.draw_pinching:
+                    if pinch_distance > 70:
+                        self.draw_pinching = False
+                else:
+                    if pinch_distance < 45:
+                        self.draw_pinching = True
 
-                # Trigger click if pinch detected and current gesture is NOT fist
-                if pinch_distance < 60 and is_index_curled and confirmed_gesture != "fist":
-                    if not self.pinch_active:
-                        self.pinch_active = True
-                        self.mouse_controller.click()
-                        print("[PINCH] Click detected")
-                elif pinch_distance > 80:
-                    self.pinch_active = False
-
-
-
-                # Execute gesture action
+                # Execute gesture action. In drawing mode this resolves only to
+                # discrete commands; in normal mode it performs the cursor /
+                # scroll / click actions directly.
                 if is_confirmed:
                     action = self.gesture_mapper.execute(confirmed_gesture)
-
-                    # Emit mode change signals
                     if action == "drawing":
                         self.mode_changed.emit("drawing")
                     elif action == "normal":
                         self.mode_changed.emit("normal")
-
-                    # Emit drawing mode gesture commands
-                    if action in ["clear_canvas", "pen_up", "pen_down", "change_color",
-                                  "brush_size_up", "save_drawing", "undo", "redo", "erase_mode"]:
+                    elif action in ["clear_canvas", "size_up", "size_down",
+                                    "toggle_palette", "paste_image", "screenshot"]:
                         print(f"[VISION] emitting command: {action}")
                         self.gesture_command.emit(action)
-
                     display_gesture = confirmed_gesture
                 else:
                     display_gesture = "stabilizing..."
 
-                # Determine cursor movement
-                should_move = False
-                speed_multiplier = 1.0
-
-                if is_confirmed:
-                    if confirmed_gesture == "open_hand":
-                        should_move = True
-                        speed_multiplier = 1.0
+                # is_drawing_mode() is read AFTER execute() so a mode just toggled
+                # this frame takes effect immediately.
+                if self.gesture_mapper.is_drawing_mode():
+                    # Tool follows the live gesture; position streams every frame
+                    # (even before a gesture confirms) so the pointer tracks
+                    # smoothly. The overlay performs all canvas manipulation.
+                    if self.draw_pinching:
+                        tool = "drag"
                     elif confirmed_gesture == "point":
-                        should_move = True
-                        speed_multiplier = 0.5
-                    elif confirmed_gesture == "fist":
-                        should_move = False
-
-                # Move mouse cursor
-                if should_move:
-                    self.mouse_controller.move(index_fingertip[0], index_fingertip[1],
-                                              frame_width, frame_height, speed_multiplier)
+                        tool = "draw"
+                    elif confirmed_gesture == "open_hand":
+                        tool = "erase"
+                    else:
+                        tool = "hover"
+                    self.draw_event.emit({
+                        "x": index_fingertip[0], "y": index_fingertip[1],
+                        "tx": thumb_tip[0], "ty": thumb_tip[1],
+                        "tool": tool, "pinching": self.draw_pinching,
+                        "gesture": confirmed_gesture, "present": True,
+                        "frame_w": frame_width, "frame_h": frame_height,
+                    })
+                    # No OS-cursor movement or pinch-click while drawing.
+                    if self.prev_should_move:
+                        self.mouse_controller.reseed()
+                    self.prev_should_move = False
                 else:
-                    self.mouse_controller.prev_x = None
-                    self.mouse_controller.prev_y = None
+                    # -------------------- NORMAL MODE --------------------
+                    # Pinch-click (own thresholds; index must be curled so it
+                    # doesn't fire mid-gesture, and never while making a fist).
+                    is_index_curled = abs(index_fingertip[1] - index_pip[1]) < 30
+                    if pinch_distance < 60 and is_index_curled and confirmed_gesture != "fist":
+                        if not self.pinch_active:
+                            self.pinch_active = True
+                            self.mouse_controller.click()
+                            print("[PINCH] Click detected")
+                    elif pinch_distance > 80:
+                        self.pinch_active = False
+
+                    # Determine cursor movement
+                    should_move = False
+                    speed_multiplier = 1.0
+                    if is_confirmed:
+                        if confirmed_gesture == "open_hand":
+                            should_move = True
+                            speed_multiplier = 1.0
+                        elif confirmed_gesture == "point":
+                            should_move = True
+                            speed_multiplier = 0.5
+                        elif confirmed_gesture == "fist":
+                            should_move = False
+
+                    # Move mouse cursor
+                    if should_move:
+                        self.mouse_controller.move(index_fingertip[0], index_fingertip[1],
+                                                  frame_width, frame_height, speed_multiplier)
+                    elif self.prev_should_move:
+                        # Just stopped moving (fist / gesture change / stabilizing):
+                        # clutch once so the next move re-anchors without snapping
+                        # the cursor.
+                        self.mouse_controller.reseed()
+                    self.prev_should_move = should_move
 
                 # Emit gesture detected
                 self.gesture_detected.emit(display_gesture)
             else:
+                if self.gesture_mapper.is_drawing_mode():
+                    # In drawing mode: tell the overlay the hand is gone so it
+                    # lifts the pen and hides the cursor (no OS-cursor clutch).
+                    self.draw_pinching = False
+                    self.draw_event.emit({
+                        "x": 0, "y": 0, "tool": "hover", "pinching": False,
+                        "present": False,
+                        "frame_w": frame_width, "frame_h": frame_height,
+                    })
+                else:
+                    # Hand lost: clutch (once) so re-acquisition resumes from the
+                    # cursor's current position instead of jumping.
+                    if self.prev_should_move:
+                        self.mouse_controller.reseed()
+                    self.prev_should_move = False
                 self.gesture_detected.emit("No Hand")
 
             self.frame_ready.emit(frame.copy())

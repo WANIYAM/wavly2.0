@@ -10,7 +10,7 @@ Key capabilities:
 - Hand gesture-based click, scroll, and application control
 - Context-aware app profiles for Chrome, VLC, and PowerPoint
 - Voice command listening with wake-word activation and spoken responses
-- Drawing mode overlay with paint, erase, undo/redo, and screenshot support
+- Drawing mode overlay (tool-follows-gesture): gesture-driven draw/erase/clear, pinch to move & resize strokes and images, clipboard image paste, and a dwell-activated on-screen toolbar
 - Data collection and model training utilities
 
 ---
@@ -110,7 +110,7 @@ Contains explicit pinned dependencies:
   - Supports two modes: `normal` and `drawing`
   - Implements gesture cooldowns and deduplication
   - In normal mode, maps gestures to cursor mode, click, scroll, screenshots, keyboard shortcuts, and volume
-  - In drawing mode, maps gestures to canvas actions such as pen up/down, change color, brush size, save, undo/redo, and erase
+  - In drawing mode (`_execute_drawing`), resolves discrete commands — clear (`fist`), stroke size +/- (`thumbs_up`/`thumbs_down`), palette toggle (`two_fingers`), image paste (`four_fingers`), exit (`spider_man`) — while the continuous tools (point=draw, open_hand=erase, pinch=grab/move/resize) are applied per-frame by the overlay
 - `mouse_controller.py`
   - Smooths cursor movement using exponential moving average
   - Normalizes hand position to screen coordinates with margin compensation
@@ -131,14 +131,14 @@ Contains explicit pinned dependencies:
 ### `src/ui/`
 - `overlay_window.py`
   - Main transparent fullscreen PyQt6 overlay window
-  - Maintains drawing canvas and visual HUD
-  - Supports undo/redo, save drawing to Pictures, clear canvas, toggle erase, and toggle drawing mode
+  - Owns the drawing surface: a raster stroke canvas + image-object layer, One-Euro pointer smoothing, and full-screen edge mapping
+  - `on_draw_event` turns each per-frame draw event into draw/erase/grab actions; supports clear, stroke sizing, colour palette, clipboard image paste, object move/resize (`_update_manip`), and a right-edge dwell toolbar (`_paint_panel`)
   - Renders a cyberpunk-style status HUD with gesture, mode, active app, and voice status
-  - Handles key presses: `C` to clear, `D` to toggle drawing, `Esc` to close
+  - Handles key presses: `C` to clear, `Esc` to close
 - `vision_thread.py`
   - Background QThread that captures webcam frames from `cv2.VideoCapture(0)`
   - Detects landmarks, predicts gestures, and confirms gestures using a 10-frame voting buffer
-  - Emits Qt signals for point/trail updates, gestures, mode changes, app changes, and voice status
+  - Emits Qt signals: a per-frame `draw_event` dict (drawing state), gestures, mode changes, app changes, and voice status
   - Manages voice controller/responder lifecycle
   - Performs hand gesture-based motion, pinch click detection, and execution of mapped actions
 
@@ -157,17 +157,21 @@ Recognized gesture labels:
 - `thumbs_down`
 - `l_shape`
 - `pinch`
+- `spider_man`
 
 Gesture behavior includes:
 - `open_hand` → normal cursor movement mode
 - `point` → precision cursor movement mode
 - `fist` → freeze cursor
-- `two_fingers` → scroll or enter drawing mode when held for 2 seconds
-- `pinch` → left click or exit drawing mode
+- `two_fingers` → scroll
+- `pinch` → left click (in drawing mode: grab + move/resize a stroke or image)
 - `l_shape` → right click
-- `thumbs_up` / `thumbs_down` → volume control
+- `thumbs_up` / `thumbs_down` → volume control (in drawing mode: stroke size +/-)
 - `three_fingers` → launch on-screen keyboard
-- `four_fingers` → screenshot
+- `four_fingers` → screenshot to clipboard (in drawing mode: paste image from clipboard)
+- `spider_man` → toggle drawing mode ON/OFF
+
+In **drawing mode** the per-frame tool follows the gesture: `point` draws, `open_hand` erases (and drops a grabbed element), `fist` clears, `two_fingers` toggles the colour palette.
 
 ---
 

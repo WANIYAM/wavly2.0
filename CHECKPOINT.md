@@ -2,6 +2,11 @@
 
 This document outlines the current status, configurations, structures, and implementation details of the Wavly 2.0 gesture control system.
 
+## Recent Updates (June 2026)
+- **Drawing Mode — Full Rewrite**: Replaced the toggle-based pen model with a **tool-follows-gesture** surface. The tool is recomputed every frame from the live gesture (only `point` draws). Added: pointer-style erase (`open_hand`), clear-all (`fist`), object-aware pinch manipulation (grab a stroke/image → move → hold still to resize → drop, with `open_hand` as an instant drop), `thumbs_up`/`thumbs_down` stroke sizing, a gesture-toggled colour palette (`two_fingers`), clipboard image paste (`four_fingers`), and a dwell-activated right-edge toolbar. The index pointer is One-Euro smoothed, a central frame band maps to the full screen (edge reachability), and pasted images stay crisp at any scale. `vision_thread` now streams a per-frame `draw_event` dict to the overlay (replacing `point_detected`). Exit is `spider_man` only (pinch is now grab).
+- **Drawing Mode Trigger Redesign**: The `two_fingers` 2.0s hold timer was removed and replaced with a `spider_man` toggle gesture (geometric detection) to enter/exit Drawing Mode.
+- **Voice Announcements**: `VoiceResponder` announces "Drawing mode on" and "Drawing mode off" when modes switch.
+
 ## Project Structure
 
 ```
@@ -64,24 +69,26 @@ wavly2.0/
 - **`open_hand`** $\rightarrow$ Transitions computer cursor control to `"move"` state (default cursor tracking).
 - **`point`** $\rightarrow$ Transitions computer cursor control to `"precision"` state (tracks cursor at half-speed).
 - **`three_fingers`** $\rightarrow$ Opens the Windows OS virtual on-screen keyboard (`win + ctrl + o`).
-- **`four_fingers`** $\rightarrow$ Takes a screenshot via Windows Snipping Tool (`win + shift + s`).
+- **`four_fingers`** $\rightarrow$ Captures the full screen directly to the clipboard (no Snipping Tool) and shows an on-screen confirmation toast.
 - **`thumbs_up`** $\rightarrow$ Increases system audio volume (`volumeup`).
 - **`thumbs_down`** $\rightarrow$ Decreases system audio volume (`volumedown`).
 - **`l_shape`** $\rightarrow$ Triggers right-click context menu.
 - **`pinch`** $\rightarrow$ Triggers mouse left-click.
-- **`two_fingers`** (Hold for 2.0s) $\rightarrow$ Switches active application mode from **Normal** to **Drawing**.
+- **`two_fingers`** $\rightarrow$ Switches to scroll mode based on hand Y position.
+- **`spider_man`** $\rightarrow$ Toggles active application mode from **Normal** to **Drawing**.
 
-### Drawing Mode (Transparent Overlay Drawing Canvas)
-- **`pinch`** $\rightarrow$ Switches active application mode from **Drawing** back to **Normal**.
-- **`fist`** $\rightarrow$ Clears the drawing overlay canvas (`clear_canvas`).
-- **`open_hand`** $\rightarrow$ Lifts the drawing pen up (`pen_up`).
-- **`point`** $\rightarrow$ Lowers the drawing pen to write/draw (`pen_down`).
-- **`two_fingers`** $\rightarrow$ Cyclically changes current brush color (`change_color`).
-- **`three_fingers`** $\rightarrow$ Increases brush size (`brush_size_up`).
-- **`four_fingers`** $\rightarrow$ Saves the current canvas drawing to an image file (`save_drawing`).
-- **`thumbs_up`** $\rightarrow$ Performs an undo action (`undo`).
-- **`thumbs_down`** $\rightarrow$ Performs a redo action (`redo`).
-- **`l_shape`** $\rightarrow$ Toggles eraser brush mode (`erase_mode`).
+### Drawing Mode (Tool-Follows-Gesture Overlay Canvas)
+The active tool is recomputed every frame from the live gesture; only `point` draws.
+- **`point`** $\rightarrow$ **Draw** (the only gesture that draws).
+- **`open_hand`** $\rightarrow$ **Erase** along the pointer path; also **drops** a grabbed element instantly.
+- **`fist`** $\rightarrow$ **Clear** the whole canvas (`clear_canvas`).
+- **`pinch`** $\rightarrow$ **Grab** the connected ink blob or image under the thumb-index midpoint, then **move** it; **hold still ~2 s** to enter Resize mode (scale by thumb-index distance), **~3.5 s** to drop. Grabbed images rise to the top.
+- **`two_fingers`** $\rightarrow$ Toggle the colour palette popup (`toggle_palette`); dwell on a swatch to pick.
+- **`thumbs_up`** $\rightarrow$ Increase stroke size (`size_up`).
+- **`thumbs_down`** $\rightarrow$ Decrease stroke size (`size_down`).
+- **`four_fingers`** $\rightarrow$ Paste an image from the clipboard (`paste_image`).
+- **`spider_man`** $\rightarrow$ Exit Drawing Mode (pinch no longer exits).
+- **Right-edge toolbar**: dwell the pointer ~1 s on a button (draw, eraser, stroke +/−, colour, paste, clear); it highlights the live tool. `three_fingers` / `l_shape` are unused in drawing mode.
 
 ---
 
@@ -97,6 +104,7 @@ wavly2.0/
 - **Index Finger Curl Validation**: Absolute y-distance between index fingertip (landmark 8) and index PIP joint (landmark 6) must be less than **30** pixels.
 - **Release Distance**: `> 80` pixels.
 - **Safety Restriction**: Pinch is ignored if the confirmed gesture is `"fist"`.
+- **Drawing-mode grab pinch** (separate, hysteretic): latches on below **45** px and releases above **70** px — used to grab/move/resize elements, independent of the normal-mode click pinch above.
 
 ### 3. Gesture Cooldowns (Seconds)
 - `"open_hand"`: 2.0
@@ -109,6 +117,7 @@ wavly2.0/
 - `"thumbs_down"`: 2.0
 - `"l_shape"`: 2.0
 - `"pinch"`: 2.0
+- `"spider_man"`: 2.0
 
 ### 4. Coordinate Normalization Method
 Hand landmark coordinates are normalized relative to the wrist (landmark 0). For each of the 21 landmarks detected by MediaPipe:

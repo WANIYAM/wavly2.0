@@ -12,26 +12,50 @@ Wavly is an intelligent, touchless user interface system that translates real-ti
 - **✅ Phase 2 — Mouse Control**: Cursor movement tracking, coordinate smoothing (exponential weighted moving average), and click handling.
 - **✅ Phase 3 — Gesture Recognition (99.66% accuracy)**: Custom gesture classifier utilizing a RandomForest classifier model trained on a 10-gesture dataset.
 - **✅ Phase 5 — Context Awareness**: Dynamic detection of foreground active windows and context-sensitive application profiles.
-- **✅ Phase 6 — UI Overlay**: Transparent overlay drawing canvas (Drawing Mode) with custom painter tools (brush size, colors, erase, undo/redo).
+- **✅ Phase 6 — UI Overlay & Drawing Mode**: Transparent overlay canvas (Drawing Mode toggled by the spider_man gesture). Rewritten June 2026 into a tool-follows-gesture surface — draw/erase/clear, pinch to grab & move/resize strokes and images, clipboard image paste, a smoothed pointer, and a dwell-activated on-screen toolbar.
 - **✅ Phase 8 — Presentation Mode**: Custom PowerPoint presentation control actions with transition delays.
 - **✅ Phase 9 — Voice Integration**: Threaded background speech command listener utilizing Google Web Speech API and PyAudio to trigger system automation.
 
 ---
 
-## All 10 Gestures & Default Actions
+## All 11 Gestures & Default Actions
 
-Wavly recognizes **10 distinct hand gestures**. In the **Default System Profile (Normal Mode)**, these gestures control mouse movement, clicking, scrolling, and system utilities:
+Wavly recognizes **11 distinct hand gestures**. In the **Default System Profile (Normal Mode)**, these gestures control mouse movement, clicking, scrolling, and system utilities:
 
 1. **`open_hand`** (Label 1) → Normal Cursor Mode (Default pointer tracking)
 2. **`point`** (Label 2) → Precise Cursor Mode (Slower, fine-grain mouse control)
 3. **`fist`** (Label 0) → Freeze Cursor (Stops all mouse movement)
-4. **`two_fingers`** (Label 3) → Scroll Mode (Triggers vertical scroll based on hand movement / Hold for 2 seconds to enter **Drawing Mode**)
-5. **`pinch`** (Label 9) → Left Mouse Click (Exits **Drawing Mode** if active)
+4. **`two_fingers`** (Label 3) → Scroll Mode (Triggers vertical scroll based on hand movement)
+5. **`pinch`** (Label 9) → Left Mouse Click *(in Drawing Mode: grab and move/resize the stroke or image under your fingers)*
 6. **`l_shape`** (Label 8) → Right Mouse Click
 7. **`three_fingers`** (Label 4) → Open On-Screen Keyboard (`Win + Ctrl + O`)
-8. **`four_fingers`** (Label 5) → Take Screenshot (`Win + Shift + S`)
+8. **`four_fingers`** (Label 5) → Capture Screenshot to Clipboard (direct grab, no Snipping Tool; shows an on-screen confirmation)
 9. **`thumbs_up`** (Label 6) → Volume Up
 10. **`thumbs_down`** (Label 7) → Volume Down
+11. **`spider_man`** (Label 10) → Toggle Drawing Mode ON/OFF (Geometric detection: thumb, index, pinky extended; middle and ring curled)
+
+---
+
+## Drawing Mode
+
+Make the **spider_man** gesture to drop a transparent canvas over your screen. Drawing Mode is **tool-follows-gesture** — the active tool is whatever your hand is doing right now, and only the index finger draws:
+
+| Gesture | Action |
+|:--------|:-------|
+| **`point`** (index finger) | **Draw** — the only gesture that draws |
+| **`open_hand`** (open palm) | **Erase** along the pointer path · also **drops** a grabbed element instantly |
+| **`fist`** | **Clear** the whole canvas |
+| **`pinch`** (thumb + index) | **Grab** the stroke/image under your fingers, then **move** it (and **resize** in Resize mode) |
+| **`thumbs_up` / `thumbs_down`** | Increase / decrease stroke size |
+| **`two_fingers`** | Toggle the colour palette popup (dwell on a swatch to pick) |
+| **`four_fingers`** | Paste an image from the clipboard |
+| **`spider_man`** | Exit Drawing Mode |
+
+**Moving & resizing elements** — Pinch over a stroke or image to grab it (grabbed images jump to the front). It starts in **Move** mode; **hold it still for ~2 s** to switch to **Resize** mode, then spread/close your thumb and index to scale it. **Hold still ~3.5 s** or **open your palm** to drop it. Pasted images and screenshots stay crisp at any size.
+
+**On-screen toolbar** — A panel on the **right edge** mirrors every tool with hand-drawn icons (draw, eraser, stroke +/−, colour, paste, clear). **Hover the pointer over a button for ~1 second** to activate it — no gesture needed. The panel always highlights the tool you're currently using, so switching tools by gesture updates it automatically.
+
+Leaving Drawing Mode hides your work but keeps it in memory — re-enter and it reappears exactly as you left it. The pointer is One-Euro smoothed, and you can reach every edge and corner of the screen.
 
 ---
 
@@ -59,6 +83,37 @@ Speak clearly to execute any of the following 20 voice commands:
 - **`previous slide`** → PowerPoint previous slide (`Left Arrow`)
 - **`start presentation`** → PowerPoint slide show start (`F5`)
 - **`stop presentation`** → PowerPoint exit slide show (`Escape`)
+
+### Natural Language & Aliases
+
+Wavly supports fuzzy keyword matching and synonyms. You don't have to say the exact phrase—as long as your sentence contains the keyword, it will execute the command. Some examples:
+
+- **"chrome"** or **"browser"** → Maps to `open chrome`
+- **"notepad"** or **"editor"** → Maps to `open notepad`
+- **"new"**, **"close"**, **"switch"** → Maps to tab controls
+- **"next"**, **"previous"** → Maps to slide controls
+- **"forward"**, **"back"** → Maps to navigation
+- **"louder"**, **"quieter"** → Maps to volume controls
+- **"snap"** or **"print screen"** → Maps to `screenshot`
+
+*Example: Saying "Wavly, pull up the browser please" will successfully detect "browser" and open Chrome.*
+
+### Voice Session Management
+
+#### Wake Words
+
+Wavly starts in **standby mode** and activates when it hears the wake word. Because Google Web Speech API often mishears "Wavly", the following **26 fuzzy/phonetic variants** are all accepted:
+
+`wavly` · `wavy` · `wavely` · `wably` · `waverly` · `waveely` · `babli` · `bably` · `baby` · `devli` · `wobbly` · `wavley` · `wally` · `wevley` · `wifely` · `waffly` · `wavvy` · `wabli` · `waveli` · `wahli` · `wovly` · `wobly` · `webly` · `waylee` · `wabley`
+
+#### Goodbye / Session-End Phrases
+
+To end an active session and return Wavly to standby, say any of these phrases (substring matching, so surrounding words like "okay" or "please" won't break it):
+
+- **Phrases**: `goodbye` · `goodbye wavly` · `stop listening` · `shut down` · `deactivate` · `bye bye` · `see you` · `see ya` · `go to sleep` · `power down` · `end session` · `that's all` · `that's it` · `thank you wavly` · `thanks wavly` · `goodnight` · `goodnight wavly` · `good night`
+- **Keywords** (whole-word match only): `bye` · `sleep` · `stop` (guarded — won't trigger inside "stop presentation")
+
+Goodbye triggers a **randomized farewell response** (e.g. *"See you soon, sir."*, *"Standing by, sir."*, *"Going to sleep, sir. Say my name when you need me."*).
 
 ---
 
