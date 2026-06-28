@@ -20,6 +20,7 @@ class VisionThread(QThread):
     # draw_event carries the full per-frame drawing state (position + active
     # tool + pinch) while in drawing mode; the overlay owns canvas manipulation.
     draw_event = pyqtSignal(dict)
+    keyboard_event = pyqtSignal(dict)
     gesture_detected = pyqtSignal(str)
     gesture_command = pyqtSignal(str)
     mode_changed = pyqtSignal(str)
@@ -31,7 +32,7 @@ class VisionThread(QThread):
         super().__init__()
         self.running = True
         self.hand_tracker = HandTracker(
-            max_hands=1,
+            max_hands=2,
             detection_confidence=0.7,
             tracking_confidence=0.7
         )
@@ -56,6 +57,12 @@ class VisionThread(QThread):
         # Tracks whether the cursor was moving last frame, so we clutch (reseed)
         # only on the moving -> not-moving transition rather than every frame.
         self.prev_should_move = False
+        # Keyboard mode flag
+        self.keyboard_mode = False
+        self._kbd_exit_triggered = False
+        # Per-hand gesture buffers for keyboard mode
+        self.left_gesture_buffer = []
+        self.right_gesture_buffer = []
 
     def stop(self):
         if not self.running:
@@ -65,8 +72,117 @@ class VisionThread(QThread):
         self.voice_controller.stop()
         self.voice_responder.stop()
 
+    def _classify_hands(self, hands_data):
+        """Split detected hands into left and right.
+        MediaPipe labels are camera-mirrored: 'Left' in feed = user's right hand.
+        Returns: (left_hand_data, right_hand_data) where each is (landmarks, label) or None.
+        """
+        left, right = None, None
+        for landmarks, label in hands_data:
+            # MediaPipe 'Left' = user's RIGHT hand (mirrored)
+            if label == "Left":
+                right = (landmarks, label)
+            else:
+                left = (landmarks, label)
+        return left, right
+
+    def _process_keyboard_frame(self, hands_data, frame_width, frame_height):
+        """Process both hands for keyboard mode and emit keyboard_event."""
+        left_hand, right_hand = self._classify_hands(hands_data)
+
+        # Build per-frame keyboard state dict
+        kbd = {
+            "left_present": left_hand is not None,
+            "right_present": right_hand is not None,
+            "frame_w": frame_width,
+            "frame_h": frame_height,
+        }
+
+        # Left hand: extract gesture + index fingertip position
+        left_confirmed_gesture = None
+        if left_hand:
+            landmarks, _ = left_hand
+            raw_lm = [(lm.x, lm.y) for lm in landmarks.landmark]
+            wrist_x, wrist_y = raw_lm[0]
+            norm_lm = [(x - wrist_x, y - wrist_y) for x, y in raw_lm]
+            left_gesture = self.gesture_predictor.predict(norm_lm)
+
+            # Buffer and confirm left hand gesture
+            self.left_gesture_buffer.append(left_gesture)
+            if len(self.left_gesture_buffer) > 6:
+                self.left_gesture_buffer.pop(0)
+
+            # Confirm gesture with 4/6 votes (looser than normal mode for responsiveness)
+            from collections import Counter
+            gesture_counts = Counter(self.left_gesture_buffer)
+            most_common, vote_count = gesture_counts.most_common(1)[0] if gesture_counts else ("unknown", 0)
+            if vote_count >= 4 and most_common != "unknown":
+                left_confirmed_gesture = most_common
+
+            lm_list = self.hand_tracker.get_landmark_list(landmarks, frame_width, frame_height)
+            left_index_tip = lm_list[8]  # Index fingertip
+
+            kbd["left_gesture"] = left_confirmed_gesture
+            kbd["left_x"] = left_index_tip[0]
+            kbd["left_y"] = left_index_tip[1]
+        else:
+            self.left_gesture_buffer = []
+            kbd["left_gesture"] = None
+            kbd["left_x"] = 0
+            kbd["left_y"] = 0
+
+        # Right hand: same extraction
+        right_confirmed_gesture = None
+        if right_hand:
+            landmarks, _ = right_hand
+            raw_lm = [(lm.x, lm.y) for lm in landmarks.landmark]
+            wrist_x, wrist_y = raw_lm[0]
+            norm_lm = [(x - wrist_x, y - wrist_y) for x, y in raw_lm]
+            right_gesture = self.gesture_predictor.predict(norm_lm)
+
+            # Buffer and confirm right hand gesture
+            self.right_gesture_buffer.append(right_gesture)
+            if len(self.right_gesture_buffer) > 6:
+                self.right_gesture_buffer.pop(0)
+
+            from collections import Counter
+            gesture_counts = Counter(self.right_gesture_buffer)
+            most_common, vote_count = gesture_counts.most_common(1)[0] if gesture_counts else ("unknown", 0)
+            if vote_count >= 4 and most_common != "unknown":
+                right_confirmed_gesture = most_common
+
+            lm_list = self.hand_tracker.get_landmark_list(landmarks, frame_width, frame_height)
+            right_index_tip = lm_list[8]
+
+            kbd["right_gesture"] = right_confirmed_gesture
+            kbd["right_x"] = right_index_tip[0]
+            kbd["right_y"] = right_index_tip[1]
+        else:
+            self.right_gesture_buffer = []
+            kbd["right_gesture"] = None
+            kbd["right_x"] = 0
+            kbd["right_y"] = 0
+
+        self.keyboard_event.emit(kbd)
+
+        # Check exit gesture: left hand three_fingers (confirmed)
+        if left_confirmed_gesture == "three_fingers":
+            # Debounce: only exit once
+            if not self._kbd_exit_triggered:
+                self._kbd_exit_triggered = True
+                self.keyboard_mode = False
+                self.gesture_mapper.set_keyboard_mode(False)
+                self.left_gesture_buffer = []
+                self.right_gesture_buffer = []
+                self.mode_changed.emit("normal")
+                print("[MODE] Keyboard → Normal (left hand three_fingers)")
+                if self.voice_responder:
+                    self.voice_responder.system_speak("Keyboard closed")
+        else:
+            self._kbd_exit_triggered = False
+
     def run(self):
-        cap = cv2.VideoCapture(0)
+        cap = cv2.VideoCapture(1)
 
         if not cap.isOpened():
             print("Error: Could not open webcam")
@@ -114,8 +230,20 @@ class VisionThread(QThread):
             self.prev_frame_time = current_time
 
             # Detect hand landmarks
-            landmarks = self.hand_tracker.detect(frame)
+            hands_data = self.hand_tracker.detect(frame)
             frame_height, frame_width = frame.shape[:2]
+
+            # Keyboard mode gets its own branch
+            if self.keyboard_mode:
+                self._process_keyboard_frame(hands_data, frame_width, frame_height)
+                # Emit "Keyboard Mode" for HUD so it doesn't show stale gestures
+                self.gesture_detected.emit("Keyboard Mode")
+                self.frame_ready.emit(frame.copy())
+                self.msleep(5)
+                continue
+
+            # Normal/Drawing modes: use first hand only (backward compat)
+            landmarks = hands_data[0][0] if hands_data else None
 
             display_gesture = "No Hand"
 
@@ -209,6 +337,9 @@ class VisionThread(QThread):
                         self.mode_changed.emit("drawing")
                     elif action == "normal":
                         self.mode_changed.emit("normal")
+                    elif action == "keyboard":
+                        self.keyboard_mode = True
+                        self.mode_changed.emit("keyboard")
                     elif action in ["clear_canvas", "size_up", "size_down",
                                     "toggle_palette", "paste_image", "screenshot"]:
                         print(f"[VISION] emitting command: {action}")

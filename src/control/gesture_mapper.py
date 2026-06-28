@@ -7,6 +7,7 @@ class GestureMapper:
     def __init__(self, voice_responder=None):
         self.current_mode = "normal"
         self.drawing_mode = False
+        self.keyboard_mode = False
         self.voice_responder = voice_responder
         self.two_fingers_start = None
         self.last_confirmed_gesture = None
@@ -110,9 +111,11 @@ class GestureMapper:
             print("[GESTURE] two_fingers → scroll")
             return "scroll"
         elif gesture_name == "three_fingers":
-            pyautogui.hotkey('win', 'ctrl', 'o')
-            print("[GESTURE] three_fingers → keyboard")
-            return "executed"
+            self.keyboard_mode = True
+            print("[MODE] Normal → Keyboard")
+            if self.voice_responder:
+                self.voice_responder.system_speak("Keyboard mode on")
+            return "keyboard"
         elif gesture_name == "four_fingers":
             # Capture handled by the overlay (direct grab to clipboard + toast),
             # so we just signal the action instead of opening the Snipping Tool.
@@ -205,6 +208,12 @@ class GestureMapper:
 
     def is_drawing_mode(self):
         return self.drawing_mode
+
+    def is_keyboard_mode(self):
+        return self.keyboard_mode
+
+    def set_keyboard_mode(self, enabled):
+        self.keyboard_mode = enabled
 
     def update_hand_position(self, y):
         self.current_hand_y = y

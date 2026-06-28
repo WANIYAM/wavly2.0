@@ -23,15 +23,21 @@ class HandTracker:
             frame: OpenCV BGR image frame
 
         Returns:
-            landmarks: MediaPipe hand landmarks object, or None if no hand detected
+            List of (landmarks, handedness_label) tuples, one per detected hand.
+            handedness_label is "Left" or "Right" (camera-mirrored: MediaPipe "Left" = user's right hand).
+            Returns empty list if no hands detected.
         """
         rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         results = self.hands.process(rgb_frame)
 
-        if results.multi_hand_landmarks:
-            return results.multi_hand_landmarks[0]
+        if results.multi_hand_landmarks and results.multi_handedness:
+            hands_data = []
+            for landmarks, handedness in zip(results.multi_hand_landmarks, results.multi_handedness):
+                label = handedness.classification[0].label  # "Left" or "Right"
+                hands_data.append((landmarks, label))
+            return hands_data
 
-        return None
+        return []
 
     def get_landmark_list(self, landmarks, frame_width, frame_height):
         """

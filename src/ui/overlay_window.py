@@ -177,6 +177,29 @@ class OverlayWindow(QMainWindow):
         # Transient brush-size preview ring
         self.size_preview_until = 0.0
 
+        # Keyboard mode state
+        self.keyboard_active = False
+        self.kbd_layout = []  # Built on first keyboard mode entry
+
+        # Per-hand dwell state
+        self.left_dwell_key = None
+        self.left_dwell_start = 0.0
+        self.left_pointer = None
+        self.left_smooth_x = OneEuroFilter()
+        self.left_smooth_y = OneEuroFilter()
+
+        self.right_dwell_key = None
+        self.right_dwell_start = 0.0
+        self.right_pointer = None
+        self.right_smooth_x = OneEuroFilter()
+        self.right_smooth_y = OneEuroFilter()
+
+        self.kbd_dwell_time = 0.5  # seconds to trigger key press
+
+        # Modifier state (from left hand gestures)
+        self.shift_active = False
+        self.ctrl_active = False
+
         # State variables
         self.current_gesture = "Initializing..."
         self.system_mode = "NORMAL"
@@ -216,6 +239,7 @@ class OverlayWindow(QMainWindow):
         # Connect to VisionThread
         self.vision_thread = VisionThread()
         self.vision_thread.draw_event.connect(self.on_draw_event)
+        self.vision_thread.keyboard_event.connect(self.on_keyboard_event)
         self.vision_thread.gesture_detected.connect(self.update_gesture_hud)
         self.vision_thread.gesture_command.connect(self.handle_gesture_command)
         self.vision_thread.mode_changed.connect(self.update_system_mode)
@@ -312,7 +336,24 @@ class OverlayWindow(QMainWindow):
         self.update()
 
     def update_system_mode(self, mode):
-        if mode == "drawing":
+        if mode == "keyboard":
+            self.system_mode = "KEYBOARD"
+            self.keyboard_active = True
+            # Build layout on first entry
+            if not self.kbd_layout:
+                self.kbd_layout = self._build_keyboard_layout()
+            # Reset dwell state
+            self.left_dwell_key = None
+            self.right_dwell_key = None
+            self.left_pointer = None
+            self.right_pointer = None
+            self.left_smooth_x.reset()
+            self.left_smooth_y.reset()
+            self.right_smooth_x.reset()
+            self.right_smooth_y.reset()
+            self.shift_active = False
+            self.ctrl_active = False
+        elif mode == "drawing":
             self.system_mode = "DRAWING"
             self.drawing_active = True
             # Fresh pointer state on entry so we don't streak from a stale point.
@@ -325,6 +366,9 @@ class OverlayWindow(QMainWindow):
             self.last_draw_point = None
             self.palette_open = False
             self.manip = None
+            # Exit keyboard mode if it was active
+            if self.keyboard_active:
+                self.keyboard_active = False
         else:
             self.system_mode = "NORMAL"
             # Drop anything grabbed, then stop rendering the drawing layers. The
@@ -334,6 +378,9 @@ class OverlayWindow(QMainWindow):
             self.palette_open = False
             self.last_draw_point = None
             self.pointer = None
+            # Exit keyboard mode if it was active
+            if self.keyboard_active:
+                self.keyboard_active = False
         self.update()
 
     def handle_gesture_command(self, command):
@@ -976,6 +1023,207 @@ class OverlayWindow(QMainWindow):
                     painter.setPen(QPen(QColor(255, 200, 0, 235), 3))
                     painter.drawArc(rect.adjusted(2, 2, -2, -2), 90 * 16, int(-frac * 360 * 16))
 
+    # ===================== Keyboard Mode =====================
+
+    def _build_keyboard_layout(self):
+        """Build QWERTY layout: 3 rows of letters + bottom row with Space/Backspace/Enter.
+        Returns list of dicts: {"char": str, "rect": QRectF, "shift_char": str}.
+        Full-width keyboard, transparent background, positioned at bottom of screen.
+        """
+        rows = [
+            list("QWERTYUIOP"),
+            list("ASDFGHJKL"),
+            list("ZXCVBNM"),
+        ]
+
+        # Keyboard dimensions
+        kbd_height = 280
+        key_height = 60
+        row_gap = 10
+        col_gap = 8
+        side_margin = 40
+        bottom_margin = 30
+
+        # Position at bottom of screen
+        kbd_y = self.screen_height - kbd_height - bottom_margin
+
+        keys = []
+        current_y = kbd_y + 20
+
+        for row_idx, row in enumerate(rows):
+            num_keys = len(row)
+            row_width = self.screen_width - 2 * side_margin
+            key_width = (row_width - (num_keys - 1) * col_gap) / num_keys
+
+            # Center offset for each row (optional stagger)
+            offset_x = side_margin
+            if row_idx == 1:
+                offset_x += key_width * 0.25  # Slight stagger for home row
+            elif row_idx == 2:
+                offset_x += key_width * 0.5   # Larger stagger for bottom row
+
+            current_x = offset_x
+            for char in row:
+                rect = QRectF(current_x, current_y, key_width, key_height)
+                keys.append({
+                    "char": char.lower(),
+                    "shift_char": char.upper(),
+                    "rect": rect,
+                    "is_special": False,
+                })
+                current_x += key_width + col_gap
+
+            current_y += key_height + row_gap
+
+        # Bottom row: Space (wide), Backspace, Enter
+        current_y += 10
+        row_width = self.screen_width - 2 * side_margin
+        space_width = row_width * 0.55
+        other_width = (row_width - space_width - 2 * col_gap) / 2.0
+
+        current_x = side_margin
+        keys.append({
+            "char": " ",
+            "label": "SPACE",
+            "shift_char": " ",
+            "rect": QRectF(current_x, current_y, space_width, key_height),
+            "is_special": True,
+        })
+        current_x += space_width + col_gap
+
+        keys.append({
+            "char": "backspace",
+            "label": "⌫",
+            "shift_char": "backspace",
+            "rect": QRectF(current_x, current_y, other_width, key_height),
+            "is_special": True,
+        })
+        current_x += other_width + col_gap
+
+        keys.append({
+            "char": "enter",
+            "label": "↵",
+            "shift_char": "enter",
+            "rect": QRectF(current_x, current_y, other_width, key_height),
+            "is_special": True,
+        })
+
+        return keys
+
+    def on_keyboard_event(self, ev):
+        """Process per-frame keyboard state: update pointers, detect dwells, handle modifiers."""
+        t = time.time()
+        fw = ev["frame_w"]
+        fh = ev["frame_h"]
+
+        # Extract modifier state from left hand gesture
+        left_gesture = ev.get("left_gesture")
+        self.shift_active = (left_gesture == "fist")
+        self.ctrl_active = (left_gesture == "open_hand")
+
+        # Process left hand pointer
+        if ev["left_present"]:
+            lx, ly = self._to_screen(ev["left_x"], ev["left_y"], fw, fh)
+            sx = self.left_smooth_x.filter(lx, t)
+            sy = self.left_smooth_y.filter(ly, t)
+            self.left_pointer = QPointF(sx, sy)
+            self._handle_dwell("left", self.left_pointer, t)
+        else:
+            self.left_pointer = None
+            self.left_dwell_key = None
+            self.left_smooth_x.reset()
+            self.left_smooth_y.reset()
+
+        # Process right hand pointer
+        if ev["right_present"]:
+            rx, ry = self._to_screen(ev["right_x"], ev["right_y"], fw, fh)
+            sx = self.right_smooth_x.filter(rx, t)
+            sy = self.right_smooth_y.filter(ry, t)
+            self.right_pointer = QPointF(sx, sy)
+            self._handle_dwell("right", self.right_pointer, t)
+        else:
+            self.right_pointer = None
+            self.right_dwell_key = None
+            self.right_smooth_x.reset()
+            self.right_smooth_y.reset()
+
+        self.update()
+
+    def _handle_dwell(self, hand, pointer, t):
+        """Check if pointer is dwelling on a key; trigger press after kbd_dwell_time."""
+        # Get dwell state for this hand
+        if hand == "left":
+            dwell_key_attr = "left_dwell_key"
+            dwell_start_attr = "left_dwell_start"
+        else:
+            dwell_key_attr = "right_dwell_key"
+            dwell_start_attr = "right_dwell_start"
+
+        current_dwell_key = getattr(self, dwell_key_attr)
+        current_dwell_start = getattr(self, dwell_start_attr)
+
+        # Find which key the pointer is over
+        hit_key = None
+        for key in self.kbd_layout:
+            if key["rect"].contains(pointer):
+                hit_key = key
+                break
+
+        if hit_key is None:
+            # Not over any key: reset dwell
+            setattr(self, dwell_key_attr, None)
+            return
+
+        # Over a key
+        if hit_key is not current_dwell_key:
+            # Started dwelling on a new key
+            setattr(self, dwell_key_attr, hit_key)
+            setattr(self, dwell_start_attr, t)
+        else:
+            # Still on same key: check if dwell time reached
+            elapsed = t - current_dwell_start
+            if elapsed >= self.kbd_dwell_time:
+                # Trigger key press
+                self._press_key(hit_key)
+                # Reset dwell so it doesn't repeat (lift finger to type again)
+                setattr(self, dwell_key_attr, None)
+
+    def _press_key(self, key):
+        """Execute pyautogui key press with modifiers."""
+        import pyautogui
+
+        char = key["char"]
+
+        # Special keys
+        if char == "backspace":
+            pyautogui.press("backspace")
+            self.show_toast("⌫")
+            return
+        elif char == "enter":
+            pyautogui.press("enter")
+            self.show_toast("↵")
+            return
+        elif char == " ":
+            pyautogui.press("space")
+            self.show_toast("SPACE")
+            return
+
+        # Letter keys
+        if self.ctrl_active:
+            # Ctrl+letter
+            pyautogui.hotkey("ctrl", char)
+            self.show_toast(f"Ctrl+{char.upper()}")
+        elif self.shift_active:
+            # Shift = capital letter
+            pyautogui.press(char.upper())
+            self.show_toast(char.upper())
+        else:
+            # Lowercase
+            pyautogui.press(char)
+            self.show_toast(char)
+
+    # ===================== End Keyboard Mode =====================
+
     def _draw_panel_icon(self, painter, key, rect):
         r = rect.adjusted(16, 16, -16, -16)
         cx, cy = r.center().x(), r.center().y()
@@ -1076,6 +1324,10 @@ class OverlayWindow(QMainWindow):
 
             self._paint_cursor(painter)
             self._paint_manip_ring(painter)
+
+        # Keyboard overlay
+        if self.keyboard_active:
+            self._paint_keyboard(painter)
 
         self.draw_pip(painter)
 
@@ -1207,6 +1459,96 @@ class OverlayWindow(QMainWindow):
         painter.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
         painter.drawText(int(panel.x() + 12), int(panel.y() + panel.height() - 9),
                          f"Brush size: {self.brush_size}")
+
+    def _paint_keyboard(self, painter):
+        """Render the transparent QWERTY keyboard with dwell indicators."""
+        t = time.time()
+
+        # Semi-transparent dark background panel
+        kbd_bounds = self._get_keyboard_bounds()
+        painter.setBrush(QColor(0, 10, 30, 180))
+        painter.setPen(QPen(QColor(0, 150, 255, 200), 2))
+        painter.drawRoundedRect(kbd_bounds, 16, 16)
+
+        # Render each key
+        for key in self.kbd_layout:
+            rect = key["rect"]
+            char = key.get("label", key["shift_char"] if self.shift_active else key["char"])
+
+            # Key background
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(QColor(20, 40, 70, 200))
+            painter.drawRoundedRect(rect, 8, 8)
+
+            # Key border
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.setPen(QPen(QColor(0, 180, 255, 180), 1.5))
+            painter.drawRoundedRect(rect, 8, 8)
+
+            # Key label
+            painter.setPen(QColor(200, 220, 255))
+            painter.setFont(QFont("Segoe UI", 16 if not key["is_special"] else 14, QFont.Weight.Bold))
+            painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, char.upper() if len(char) == 1 else char)
+
+            # Dwell progress rings (left hand = cyan, right hand = yellow)
+            for hand, color in [("left", QColor(0, 220, 255)), ("right", QColor(255, 200, 0))]:
+                dwell_key = getattr(self, f"{hand}_dwell_key")
+                dwell_start = getattr(self, f"{hand}_dwell_start")
+                if dwell_key is key:
+                    elapsed = t - dwell_start
+                    frac = min(1.0, elapsed / self.kbd_dwell_time)
+                    painter.setBrush(Qt.BrushStyle.NoBrush)
+                    painter.setPen(QPen(color, 3))
+                    painter.drawArc(rect.adjusted(4, 4, -4, -4), 90 * 16, int(-frac * 360 * 16))
+
+        # Draw hand cursors
+        if self.left_pointer:
+            self._paint_hand_cursor(painter, self.left_pointer, QColor(0, 220, 255), "L")
+        if self.right_pointer:
+            self._paint_hand_cursor(painter, self.right_pointer, QColor(255, 200, 0), "R")
+
+        # Modifier indicators (top-left corner of keyboard)
+        self._paint_modifiers(painter, kbd_bounds)
+
+    def _get_keyboard_bounds(self):
+        """Get bounding rect of entire keyboard for background panel."""
+        if not self.kbd_layout:
+            return QRectF()
+        min_x = min(k["rect"].left() for k in self.kbd_layout)
+        min_y = min(k["rect"].top() for k in self.kbd_layout)
+        max_x = max(k["rect"].right() for k in self.kbd_layout)
+        max_y = max(k["rect"].bottom() for k in self.kbd_layout)
+        padding = 20
+        return QRectF(min_x - padding, min_y - padding,
+                      max_x - min_x + 2 * padding, max_y - min_y + 2 * padding)
+
+    def _paint_hand_cursor(self, painter, pos, color, label):
+        """Draw a small crosshair cursor with hand label."""
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.setPen(QPen(color, 2))
+        painter.drawEllipse(pos, 8, 8)
+        painter.drawLine(QPointF(pos.x() - 14, pos.y()), QPointF(pos.x() + 14, pos.y()))
+        painter.drawLine(QPointF(pos.x(), pos.y() - 14), QPointF(pos.x(), pos.y() + 14))
+        # Label
+        painter.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
+        painter.setPen(color)
+        painter.drawText(int(pos.x() + 12), int(pos.y() - 12), label)
+
+    def _paint_modifiers(self, painter, kbd_bounds):
+        """Show active modifiers (Shift/Ctrl) in top-left of keyboard."""
+        x = kbd_bounds.left() + 16
+        y = kbd_bounds.top() + 16
+
+        painter.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
+
+        if self.shift_active:
+            painter.setPen(QColor(255, 200, 0))
+            painter.drawText(int(x), int(y), "⇧ SHIFT")
+            y += 20
+
+        if self.ctrl_active:
+            painter.setPen(QColor(0, 220, 255))
+            painter.drawText(int(x), int(y), "⌃ CTRL")
 
     def draw_hud(self, painter):
         # HUD size and position (bottom right corner)
